@@ -1,0 +1,12 @@
+X PrimeFlow Stock Token Verifier — Powered by Robinhood Chain
+Copyright 2026 The BonyNode Authors
+
+This project is not affiliated with, endorsed by, or officially connected with Robinhood Markets, Inc.
+Third-party names and marks belong to their owners and are not licensed by this repository.
+
+Everything in this repository is licensed under the Apache License, Version 2.0 (see LICENSE),
+except the data listed in DATA.md: data/, examples/, test/fixtures/ and the reference values in
+src/registry.js (the reference bytecode hash and the creator address). That data is public chain
+state, published for verification and display, not for resale. It may be redistributed unmodified
+together with the code of this repository for verification and display. No rights are claimed in
+the chain state itself. The terms that apply to the data are in DATA.md.

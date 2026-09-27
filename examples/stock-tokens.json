@@ -1,0 +1,92 @@
+{
+  "ok": true,
+  "source": "robinhood-chain-rpc",
+  "chain": 4663,
+  "section": "stockTokens",
+  "asOf": 1790476806038,
+  "partial": false,
+  "failed": [],
+  "data": {
+    "chainId": 4663,
+    "block": 73589802,
+    "count": 194,
+    "multipliersRead": 194,
+    "tokens": [
+      {
+        "symbol": "AAPL",
+        "address": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
+        "underlying": "Apple",
+        "decimals": 18,
+        "uiMultiplier": 1.0005660800610925,
+        "uiMultiplierRaw": "1000566080061092436",
+        "corporateActionApplied": true
+      },
+      {
+        "symbol": "NVDA",
+        "address": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+        "underlying": "NVIDIA",
+        "decimals": 18,
+        "uiMultiplier": 1.0007751591646306,
+        "uiMultiplierRaw": "1000775159164630595",
+        "corporateActionApplied": true
+      },
+      {
+        "symbol": "SGOV",
+        "address": "0x92fd66527192e3e61d4ddd13322aa222de86f9b5",
+        "underlying": "iShares 0-3 Month Treasury Bond",
+        "decimals": 18,
+        "uiMultiplier": 1.005101770003215,
+        "uiMultiplierRaw": "1005101770003214918",
+        "corporateActionApplied": true
+      },
+      {
+        "symbol": "SPY",
+        "address": "0x117cc2133c37b721f49de2a7a74833232b3b4c0c",
+        "underlying": "SPDR S&P 500 ETF Trust",
+        "decimals": 18,
+        "uiMultiplier": 1.001717991187472,
+        "uiMultiplierRaw": "1001717991187472003",
+        "corporateActionApplied": true
+      },
+      {
+        "symbol": "TSLA",
+        "address": "0x322f0929c4625ed5bad873c95208d54e1c003b2d",
+        "underlying": "Tesla",
+        "decimals": 18,
+        "uiMultiplier": 1,
+        "uiMultiplierRaw": "1000000000000000000",
+        "corporateActionApplied": false
+      }
+    ],
+    "authenticity": {
+      "candidates": 286,
+      "genuine": 194,
+      "rejected": 92,
+      "codeHash": "0x6c1fdd40002dcb440c7fff6a84171404d279ccb057803b65826f7546acd65630",
+      "deployer": "0x4783c67b63de2b358ac5951a7d41f47a38f3c046",
+      "method": "every contract whose name ends in \"Robinhood Token\" in the chain explorer was tested on chain: (1) decimals() is 18 and uiMultiplier() answers — 202 of 286 passed; (2) keccak256(eth_getCode) equals one reference bytecode hash — 194 of the 202 passed; (3) as an independent cross-check, the creator of each of the 202 was looked up in the explorer: all 194 share one creator address and the 8 rejected do not. Tests 2 and 3 agree on every contract. The 194 carry 194 distinct symbols",
+      "reproducibility": {
+        "bytecode": "anyone can re-run it over any RPC at the latest block, any time after the snapshot: eth_getCode at the address, keccak256 of the answer, compare with codeHash",
+        "creator": "taken from the contract-creator field of the chain explorer on the snapshot date; scripts/rebuild-registry.mjs --rebuild re-reads it from the explorer API"
+      },
+      "period": "snapshot taken 2026-09-20; the issuer adds Stock Tokens over time, so the list is a snapshot while the rule is not",
+      "source": "Robinhood Chain state via eth_getCode / eth_call, plus contract creators from the chain explorer",
+      "caution": "a token with a matching symbol but a different contract address is not a Robinhood Stock Token — the registry is keyed by ADDRESS, never by symbol"
+    },
+    "multiplier": {
+      "what": "the ERC-8056 corporate-action multiplier: Stock Tokens never rebase, so dividends and splits are expressed as this number instead. 1.0 means no corporate action has been applied yet",
+      "scale": "1e18 = 1.0, a constant of the specification — uiMultiplierDecimals() does not exist on chain (the call reverts on every token)",
+      "method": "one eth_call to uiMultiplier() per token, batched 8 per request, read at the latest block",
+      "period": "live value at the moment of the read; no history is collected, because a backward log scan would exceed what the public node allows",
+      "source": "Robinhood Chain public RPC"
+    },
+    "sharePrice": {
+      "what": "the price of ONE underlying share, derived from the price of a whole Stock Token",
+      "method": "share price = token price ÷ uiMultiplier. DIVISION, not multiplication: an oracle or a pool prices a WHOLE token and the multiplier is already inside that price, so applying it again would count the dividend twice",
+      "source": "this package does not price tokens; bring a token price (for example a Chainlink feed on this chain) and divide it by the multiplier above"
+    },
+    "resaleOk": false,
+    "rights": "Stock Token data here is chain state read over a third-party public RPC and served for verification and display only, not for resale (resaleOk: false on this answer). Read the terms of service of Robinhood Chain (https://docs.robinhood.com/chain/terms-of-service) before reusing this data"
+  },
+  "ts": 1790476806038
+}

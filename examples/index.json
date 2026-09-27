@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "source": "robinhood-chain-rpc",
+  "chain": 4663,
+  "section": "index",
+  "asOf": null,
+  "partial": false,
+  "failed": [],
+  "data": {
+    "module": "X PrimeFlow Stock Token Verifier — Powered by Robinhood Chain",
+    "disclaimer": "This project is not affiliated with, endorsed by, or officially connected with Robinhood Markets, Inc.",
+    "chain": 4663,
+    "access": "free public read API, no key required",
+    "publicBase": "/api/public/robinhood-chain",
+    "showcase": "https://xprimeflow.trade/robinhood-chain",
+    "rateLimit": {
+      "requestsPerMinute": 60,
+      "heavyEndpointsPerMinute": 30,
+      "scope": "per IP"
+    },
+    "endpoints": [
+      {
+        "path": "/stock-tokens",
+        "desc": "the registry of 194 genuine Stock Tokens with their live corporate-action multiplier, and the rule that separated them from 92 look-alikes"
+      },
+      {
+        "path": "/verify/:address",
+        "desc": "a live authenticity verdict for one contract: authentic, counterfeit, unlisted, none or unreadable, with the facts it was derived from; ?deployer=1 adds the contract creator from the chain explorer"
+      }
+    ],
+    "honesty": [
+      "A failing upstream returns HTTP 503 with a reason, never HTTP 200 with an invented empty set.",
+      "Every figure carries how it was computed, over what period, and which source it came from.",
+      "Stock Token data is for verification and display only, not for resale: the stock-tokens answer carries resaleOk: false."
+    ],
+    "terminology": "These assets are called Stock Tokens. That is the issuer's required term and this module uses no other."
+  },
+  "ts": 1790476801667
+}

@@ -1,0 +1,42 @@
+{
+  "ok": true,
+  "source": "robinhood-chain-rpc",
+  "chain": 4663,
+  "section": "verify",
+  "asOf": 1790476806167,
+  "partial": false,
+  "failed": [],
+  "data": {
+    "chainId": 4663,
+    "address": "0x1076f47f9632d726cf0ff93ad1616c45cbb8b94d",
+    "method": "one JSON-RPC batch at the latest block: eth_chainId (must be 4663), eth_blockNumber, eth_getCode (keccak256 of the answer is compared with the reference hash), and eth_call to uiMultiplier(), symbol() and name(). The address is then looked up in the registry snapshot. With the deployer option, the contract creator is read from the chain explorer and reported next to the verdict",
+    "checkedAt": "2026-09-27T02:40:06.119Z",
+    "codeHash": "0xb3e93523522c7151dcb0c2ad7022221cb56e7dbc8c7a304c0cc71d8e948f09e8",
+    "expectedCodeHash": "0x6c1fdd40002dcb440c7fff6a84171404d279ccb057803b65826f7546acd65630",
+    "codeMatch": false,
+    "multiplierAnswered": false,
+    "multiplierRaw": null,
+    "multiplier": null,
+    "listed": false,
+    "symbol": "NVDA",
+    "name": "NVIDIA • Robinhood Token",
+    "underlying": null,
+    "claimsStockToken": true,
+    "sharesTickerWith": [
+      {
+        "symbol": "NVDA",
+        "address": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+        "underlying": "NVIDIA"
+      }
+    ],
+    "genuineAddress": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+    "deployer": null,
+    "expectedDeployer": "0x4783c67b63de2b358ac5951a7d41f47a38f3c046",
+    "deployerMatch": null,
+    "verdict": "counterfeit",
+    "block": 73589845,
+    "isContract": true,
+    "deployerChecked": false
+  },
+  "ts": 1790476806167
+}

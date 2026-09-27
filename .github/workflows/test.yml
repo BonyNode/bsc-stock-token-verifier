@@ -1,0 +1,27 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # No install step: the package has no dependencies. The tests run in a network namespace with
+      # loopback only, which proves they need no external network.
+      - name: npm test (no network)
+        run: sudo unshare --net sh -c "ip link set lo up && export PATH='$PATH' && npm test"
+      - name: npm run check
+        run: npm run check

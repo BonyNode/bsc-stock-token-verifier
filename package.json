@@ -1,0 +1,35 @@
+{
+  "name": "stock-token-verifier",
+  "version": "0.1.0",
+  "description": "X PrimeFlow Stock Token Verifier — Stock Token authenticity on Robinhood Chain (chain id 4663): registry, verifier CLI and a read-only API. Zero dependencies.",
+  "private": true,
+  "license": "SEE LICENSE IN NOTICE",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BonyNode/stock-token-verifier.git"
+  },
+  "homepage": "https://github.com/BonyNode/stock-token-verifier",
+  "bugs": {
+    "url": "https://github.com/BonyNode/stock-token-verifier/issues"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "stv-verify": "bin/stv-verify.mjs",
+    "stv-serve": "bin/stv-serve.mjs"
+  },
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "test:live": "STV_LIVE=1 node --test test/live.test.mjs",
+    "check": "node scripts/check-clean.mjs",
+    "verify": "node bin/stv-verify.mjs",
+    "serve": "node bin/stv-serve.mjs",
+    "recheck": "node scripts/rebuild-registry.mjs --recheck"
+  },
+  "keywords": ["robinhood-chain", "stock-tokens", "erc-8056", "evm", "authenticity"]
+}
