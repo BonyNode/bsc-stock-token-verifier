@@ -75,6 +75,20 @@ for a placeholder wallet at that moment, but it says more about a thin or mispri
 route than about the price an eligible wallet would be quoted. The report prints "quote not
 representative" with the reason instead of the number; the raw answer stays in the snapshot.
 
+## After the US close (2026-10-09T20:05Z, the regular session ended 19:59Z)
+
+20 signed requests, 2026-10-09T20:05:00.757Z–20:05:13.908Z, placeholder wallet `0x…dead`, plus
+the keyless market status and the xStocks API.
+
+| UTC | Request | Response | Note |
+|---|---|---|---|
+| 20:05:00.758Z | signed `GET …/rwa/tokens?binanceChainId=56&platformId=bstock` | HTTP 200, `code 0`, 46 rows, all `statusInfo` `openState true`, `marketStatus null`, `reasonCode "TRADING"` | bStocks report no session: trading continues after the close |
+| 20:05:01.515Z | signed `GET …/rwa/tokens?binanceChainId=56&platformId=ondo` | HTTP 200, `code 0`, 442 rows: 320 `marketStatus "postmarket"` + `reasonCode "TRADING"`, 122 `"postmarket"` + `"UNSUPPORTED"`; NVDAon, AAPLon, TSLAon: `postmarket` / `TRADING`, `nextCloseTime` 2026-10-09T23:59:00Z, `nextOpenTime` 2026-10-10T00:05:00Z | 122 Ondo rows `UNSUPPORTED` after the close |
+| 20:05:02.323Z | keyless `GET …/rwa/market/status/ai` | `marketStatus "postmarket"`, `openState true`, `nextClose "2026-10-09T23:59:00Z"`, `nextOpen "2026-10-12T00:05:00Z"`; `offhours` `openState false`, 2026-10-10T00:06:00Z → 2026-10-11T23:55:00Z | |
+| 20:05:03Z–20:05:05Z | `GET https://api.xstocks.fi/api/v2/public/assets/{NVDAx,AAPLx,TSLAx}` | HTTP 200; `trading.currentPeriod "extended"`, `openNow true`, `tradingHoursMode "TwentyFourFive"`, `nextChangeAt "2026-10-10T00:00:00.000Z"` | |
+| 20:05:05.480Z–20:05:13.403Z | quotes USDT → NVDAB, AAPLB, TSLAB, NVDAon, AAPLon, TSLAon at 20 and 100 USD | all 12 HTTP 200, `code 0`, `executionMode "SWAP"`, `priceImpactPercent` 0.0000–0.0001. Routes: NVDAB `Kipseli`; AAPLB, TSLAB `Rfq Neptunex`; NVDAon `Kipseli` + `Uniswap V4`; AAPLon, TSLAon `Rfq Halfmoon`. USD per token at 20 / 100: NVDAB 229.72 / 229.72; NVDAon 229.70 / 229.71; AAPLB 336.88 / 336.88; AAPLon 337.39 / 337.39; TSLAB 383.12 / 383.12; TSLAon 382.86 / 382.86 | no 40367 and no 40369: 20:05Z is the Ondo post-market session, and bStocks trade around the clock |
+| 20:05:07.132Z–20:05:13.403Z | quotes USDT → NVDAx, AAPLx, TSLAx at 20 and 100 USD | all 6: HTTP 200, `code 40374`, `Insufficient liquidity for a quote…` | the same answer as during the regular session |
+
 ## Brief vs live chain
 
 | UTC | Request | Response | Note |
