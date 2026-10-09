@@ -23,11 +23,38 @@ exactly that symbol and that name. Names, symbols and decimals prove nothing. Wh
 is on the issuer's own list, and the contract at that address runs the issuer's code behind the
 issuer's proxy.
 
+Names are not even the hard case. 33 contracts named "Testing … (Ondo Tokenized)" (symbols
+`t-ABBVon`, `t-AMDon`, …) run byte-for-byte the same 824-byte proxy code as Ondo's tokens; only
+their beacon differs (`0xb3dc…cf64` instead of Ondo's `0xc046…3315`), and the two whose creator
+was looked up were created by addresses outside Ondo's deployers. A bytecode-hash check alone
+would pass them.
+
 ## Latest snapshot
 
-See [`data/snapshot.json`](data/snapshot.json) (schema `stv-bsc-snapshot/1`) and the report
-[`report/index.html`](report/index.html). The counts, the time of measurement and the source of each
-number are in the snapshot itself (`summary`, `sources`, `families.*.fingerprint`).
+[`data/snapshot.json`](data/snapshot.json) (schema `stv-bsc-snapshot/1`) and the report
+[`report/index.html`](report/index.html), scan of 2026-10-09 with the Binance Web3 API key:
+on-chain pass finished 17:04:00 UTC (`summary.measuredAt`, block 126 672 570 at its start),
+look-alike searches finished 17:11:15 UTC (`lookalikes.fetchedAt`), quotes 17:11:27–17:12:40 UTC
+during the US regular session, snapshot written 17:12:40 UTC.
+
+| Family | Listed on chain 56 | Genuine | Unknown | Look-alikes found (lower bound) |
+|---|---|---|---|---|
+| bStocks | 91 | 91 | 0 | ≥ 653 |
+| Ondo Stocks | 459 | 450 (333 stocks, 117 ETFs) | 9: 7 portfolio tokens on a second beacon and 2 dollar tokens (USDon, USDY) | ≥ 1 114 |
+| xStocks | 2 638 (1 319 tokens + 1 319 v2 wrappers) | 2 638 | 0 | ≥ 488 |
+
+782 searches, 164 of them returned a full page. Market sample (USDT → token, the same ten tickers
+in each family), cost against the Binance token price of the same run:
+
+- bStocks: +0.0 % to +0.2 % at 20, 100 and 1 000 USD for all ten;
+- Ondo: within 1.2 % at 20 USD for 8 of 10, but +9 % to +1 337 % at 1 000 USD for GOOGLon,
+  TSLAon, AMZNon, QQQon and SPYon, a route at millions of percent for MSFTon, and COINon refused
+  (40374);
+- xStocks: every quote refused — 40374 for the tokens, 40441 ("no valid quote from any vendor")
+  for the v2 wrappers.
+
+Every number in the snapshot carries its source and read time (`sources`, and `fetchedAt` per
+section).
 
 ## How a contract is judged
 
