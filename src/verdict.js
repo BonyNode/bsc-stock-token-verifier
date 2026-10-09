@@ -15,8 +15,9 @@
 // dominant beacon/admin inside it), never typed in. A listed contract that does not fit the rule is
 // an outlier: it is reported as `unknown`, not forced into either side.
 //
-// Verdicts: genuine | look-alike | unknown | none (none only for a single-address check).
-import { claimOf, sharedTicker } from './families.js';
+// Verdicts: genuine | look-alike | unknown | none (none only for a single-address check). The
+// machine value "look-alike" is shown to people as "unlisted contract using the same ticker or name".
+import { claimOf, claimantKind, sharedTicker } from './families.js';
 
 const countBy = (items, key) => {
   const m = new Map();
@@ -76,7 +77,7 @@ const EXPLAIN = Object.freeze({
   creator_mismatch: 'created by an address that created no contract fitting the family rule',
   creator_not_checked: 'creator not checked',
   fingerprint_without_listing: 'code and proxy match a family, but no list has this address',
-  claims_symbol: 'its symbol() copies a genuine contract',
+  claims_symbol: 'its symbol() is exactly the symbol of a listed contract, and its name backs it',
   claims_name: 'its name() carries the family marker',
   shares_ticker: 'shares a ticker with a family token (not a claim)',
 });
@@ -164,7 +165,7 @@ export function addressVerdict({ listed, facts, rules, index }) {
     if (claim.by.includes('name')) reasons.push('claims_name');
     if (fit.codeHash !== null) reasons.push(fit.codeHash ? 'code_hash_match' : 'code_hash_mismatch');
     if (fit.proxy !== null) reasons.push(fit.proxy ? 'proxy_match' : 'proxy_mismatch');
-    return { verdict: 'look-alike', reasons, checks: { ...checks, codeHash: fit.codeHash, proxy: fit.proxy }, explanation: explain(reasons), family: claim.family, role: null, claim, shared: null };
+    return { verdict: 'look-alike', reasons, checks: { ...checks, codeHash: fit.codeHash, proxy: fit.proxy }, explanation: explain(reasons), family: claim.family, role: null, claim: { ...claim, claimantKind: claimantKind(facts) }, shared: null };
   }
   const shared = sharedTicker(facts, index);
   const reasons = ['not_in_issuer_list', ...(shared ? ['shares_ticker'] : [])];

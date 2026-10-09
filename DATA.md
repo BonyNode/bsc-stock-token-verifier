@@ -7,7 +7,7 @@ Information only, not investment advice.
 
 | Path | Content | Origin |
 |---|---|---|
-| `data/snapshot.json` | the latest scan: lists, on-chain facts and verdicts per contract, look-alikes, the market sample, prices | BNB Smart Chain public JSON-RPC; the Binance Web3 API and Binance's keyless wallet endpoints; `api.xstocks.fi`; the Ondo token CSV — each with its read time in the file |
+| `data/snapshot.json` | the latest scan: lists, on-chain facts and verdicts per contract, unlisted contracts using the same ticker or name, the market sample, prices | BNB Smart Chain public JSON-RPC; the Binance Web3 API and Binance's keyless wallet endpoints; `api.xstocks.fi`; the Ondo token CSV — each with its read time in the file |
 | `report/index.html` | the same snapshot rendered as one HTML page | generated from `data/snapshot.json` |
 | `test/fixtures/bsc.mjs` | runtime bytecode of 5 contracts on chain 56 and their slot, name and symbol answers | public chain state, 2026-10-09 |
 | `test/fixtures/snapshot.mjs` | a minimal snapshot built by hand for tests | made up, no real data |

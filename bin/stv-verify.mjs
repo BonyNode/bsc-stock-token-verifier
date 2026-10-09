@@ -9,13 +9,15 @@
 //                   [--no-market] [--no-key] [--cache <file> | --fresh] [--rpc <url>[,…]]
 //   stv-verify report [--snapshot <file>] [--out <file>]
 //
-// Exit codes of the single check: 0 genuine · 1 look-alike · 2 unknown · 3 none · 4 nothing could
-// be read · 64 usage error · 70 internal error. Exit code 1 means "look-alike" and nothing else.
+// Exit codes of the single check: 0 genuine · 1 unlisted contract using the same ticker or name
+// (machine verdict "look-alike") · 2 unknown · 3 none · 4 nothing could be read · 64 usage error ·
+// 70 internal error. Exit code 1 means that verdict and nothing else.
 
 const EXIT = { genuine: 0, 'look-alike': 1, unknown: 2, none: 3 };
 const EXIT_UNREAD = 4;
 const EXIT_USAGE = 64;
 const EXIT_INTERNAL = 70;
+const KIND_LABEL = { bridged: 'bridged copy', test: 'test contract', other_issuer: 'other issuer', unidentified: 'claimant not identified' };
 
 const USAGE = `usage: stv-verify <address> [--json] [--rpc <url>[,<url>...]] [--snapshot <file>]
        stv-verify scan [--out <file>] [--html <file> | --no-html] [--lookalikes binance|all|none]
@@ -36,7 +38,8 @@ single check (no key needed):
 scan (writes the JSON snapshot, the primary output, and the HTML report):
   --out <file>         snapshot path (default: data/snapshot.json)
   --html <file>        report path (default: report/index.html); --no-html to skip
-  --lookalikes <scope> searches: binance (tickers Binance lists, default), all (every ticker), none
+  --lookalikes <scope> searches for unlisted contracts using a family ticker or name: binance
+                       (tickers Binance lists, default), all (every ticker), none
   --no-market          skip the market sample (pools and aggregator quotes)
   --no-key             run without the Binance Web3 API key even if one is configured
   --cache <file>       on-chain fact cache (default: .cache/onchain.jsonl); --fresh ignores it
@@ -55,7 +58,8 @@ environment:
   STV_RPC_URLS         comma-separated JSON-RPC endpoints tried before the built-in ones
 
 exit codes of the single check:
-  0 genuine · 1 look-alike · 2 unknown · 3 none (no family claim) · 4 nothing could be read
+  0 genuine · 1 unlisted contract using the same ticker or name · 2 unknown
+  3 none (no family claim) · 4 nothing could be read
   64 usage error · 70 internal error; nothing was concluded`;
 
 class UsageError extends Error {}
@@ -99,7 +103,7 @@ async function runVerify({ flags, options, positional }, mods) {
   const own = [result.symbol, result.name && `(${result.name})`].filter(Boolean).join(' ') || 'no symbol and no name';
   const headline = {
     genuine: `GENUINE ${label[result.family]} ${result.role === 'wrapper' ? 'ERC-4626 wrapper' : 'contract'} — ${own}`,
-    'look-alike': `LOOK-ALIKE — claims to be ${own}, a ${label[result.family]} symbol/name, but is not the issuer's contract`,
+    'look-alike': `UNLISTED, SAME TICKER — ${own} uses the ${result.claim?.by?.includes('symbol') ? 'symbol' : 'name'} of ${label[result.family]}${result.claim?.genuineSymbol ? ` ${result.claim.genuineSymbol}` : ''}, but is not on the issuer's list (${KIND_LABEL[result.claim?.claimantKind] || 'claimant not identified'})`,
     unknown: result.reason === 'rpc_unavailable' ? `UNKNOWN — nothing could be read (${result.error})` : `UNKNOWN — ${result.explanation}`,
     none: `NONE — ${own} makes no bStocks, Ondo or xStocks claim`,
   }[result.verdict];
@@ -114,7 +118,7 @@ async function runVerify({ flags, options, positional }, mods) {
     if (result.admin) line('admin', result.admin);
     if (result.implementation) line('implementation', result.implementation);
     line('lists', result.listedBy.length ? result.listedBy.join(', ') : 'on no list');
-    if (result.genuineAddress) line('genuine', `the issuer's ${result.claim.genuineSymbol} lives at ${result.genuineAddress}`);
+    if (result.genuineAddress) line('listed', `the issuer-listed ${result.claim.genuineSymbol} is at ${result.genuineAddress}`);
     if (result.sharedTicker) line('shared ticker', `${result.sharedTicker.ticker} is also the underlying of ${result.sharedTicker.symbol} at ${result.sharedTicker.address}; a shared ticker is not a claim`);
   }
   console.log(`  ${'snapshot'.padEnd(15)} ${result.snapshotGeneratedAt}`);
@@ -147,7 +151,7 @@ async function runScanCommand({ flags, options }, mods) {
     say(`report written: ${html}`);
   }
   for (const [family, c] of Object.entries(snapshot.summary.families)) {
-    say(`  ${family.padEnd(8)} listed ${c.listed}, genuine ${c.genuine}, unknown ${c.unknown}, no code ${c.noCode}, look-alikes ${c.lookalikes}${snapshot.summary.lookalikes.lowerBound ? ' (lower bound)' : ''}`);
+    say(`  ${family.padEnd(8)} listed ${c.listed}, genuine ${c.genuine}, unknown ${c.unknown}, no code ${c.noCode}, unlisted same-ticker contracts ${c.lookalikes}${snapshot.summary.lookalikes.lowerBound ? ' (lower bound)' : ''}`);
   }
   if (fatal) say(`Binance Web3 API stopped the keyed part: ${fatal.kind} — ${fatal.message}`);
   return 0;

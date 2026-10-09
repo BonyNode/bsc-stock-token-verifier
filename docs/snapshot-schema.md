@@ -45,7 +45,7 @@ Every section carries `status` and the `source` id(s) and `fetchedAt` of the dat
 | `sources` | Source[] | every upstream that was asked, with what came back |
 | `families` | object | `{ bstocks: Family, ondo: Family, xstocks: Family }` |
 | `tokens` | Token[] | every address on chain 56 that an issuer list or a Binance list puts in one of the three families |
-| `lookalikes` | Lookalikes | contracts that claim a family identity on chain but are not genuine |
+| `lookalikes` | Lookalikes | unlisted contracts using the ticker or name of a listed contract (machine verdict `look-alike`) |
 | `market` | Market | sampled market reality: status, pools, aggregator quotes |
 | `prices` | Prices | on-chain token price against the Binance reference price |
 | `summary` | Summary | the counts, per family |
@@ -54,7 +54,7 @@ Every section carries `status` and the `source` id(s) and `fetchedAt` of the dat
 - `affiliation` — not affiliated with Binance, Ondo or Backed;
 - `advice` — information only, not investment advice;
 - `referencePrice` — Binance's `referencePrice` is a per-share figure converted from the on-chain token price, not an official quote;
-- `lookalikeCounts` — look-alike counts are lower bounds (the search returns at most one page per query).
+- `lookalikeCounts` — counts of unlisted contracts using the same ticker or name are lower bounds (the search returns at most one page per query). Snapshots written before 2026-10-09 18:00 UTC carry the earlier wording "Look-alike counts are lower bounds…", which readers accept (`NOTICE_HISTORY` in `src/schema.js`).
 
 ## Source
 
@@ -160,7 +160,7 @@ One entry per address. Ordered by family, then symbol.
 | `pageCap` | integer | the most rows one search returns |
 | `fullPages` | integer | searches that came back with exactly `pageCap` rows: more may exist |
 | `lowerBound` | boolean | `true` whenever `fullPages > 0` or a query failed |
-| `counts` | object | `{ bstocks, ondo, xstocks, total }` |
+| `counts` | object | `{ bstocks, ondo, xstocks, total, byKind }`; `byKind`: `{ bridged, test, other_issuer, unidentified }` |
 | `items` | Lookalike[] | |
 | `otherIssuerClaims` | object[] | `{ address, symbol, name, query }`: contracts on chain 56 that claim an issuer outside the three families (e.g. a name ending in "(Coinbase)"); counted, not judged |
 
@@ -173,7 +173,8 @@ Lookalike:
 | `claims` | object | `{ family, by, genuineSymbol, genuineAddress }`; `by`: `["symbol"]`, `["name"]` or both. `symbol`: `symbol()` is exactly a genuine symbol (case included) and the name repeats it or shares a distinctive word with the genuine name; `name`: `name()` carries the family marker |
 | `onchain` | object \| null | `{ readAt, codeSize, codeHash }` |
 | `search` | object | `{ query, liquidityUsd, holders, launchPlatform, isRecognized }` as the search reported them (strings, booleans or `null`); `isRecognized` is written from the scan after the 2026-10-09 17:12 UTC snapshot, which does not have it |
-| `verdict` | string | `look-alike` |
+| `claimantKind` | string | what the contract's own name and symbol say about it: `bridged` (a bridge is named: Wormhole, LayerZero, …), `test` (name starts with Test/Testing, or symbol with `t-`/`test`), `other_issuer` (another issuer of stock-linked tokens is named), `unidentified` (nothing is said). Shown as bridged copy / test contract / other issuer / claimant not identified |
+| `verdict` | string | `look-alike` (machine value, kept stable; shown to people as "unlisted contract using the same ticker or name") |
 | `reasons` | string[] | |
 
 ## Market
@@ -196,7 +197,7 @@ MarketItem: `{ address, family, symbol, status, pools, quotes }`
 
 - `status`: `{ source, fetchedAt, openState, marketStatus, reasonCode, nextOpenAt, nextCloseAt }` or `null`
 - `pools`: `{ source, fetchedAt, status, count, liquidityUsdTotal, top: [{ protocolName, poolAddress, liquidityUsd }] }`. An empty pool list does not mean untradable: equity liquidity is quoted by RFQ
-- `quotes`: one per size: `{ sizeUsd, direction: "USDT->token", amountInRaw, fetchedAt, status: "ok" | "error", code, message, vendorName, executionMode, tradeFee, toTokenAmount, priceImpactPercent, dexes, isHoneyPot, taxRate, effectivePriceUsd }` (`effectivePriceUsd` = sizeUsd ÷ tokens received), plus `vsTokenPricePct`: number or `null`, (effectivePriceUsd ÷ the `binance-w3:rwa-price` token price of the same run − 1) × 100. `priceImpactPercent` is kept exactly as returned; measured on 2026-10-09 it behaves as a fraction (0.9996 came with an effective price 2.9 million times the token price), so it is not converted An RFQ refusal (`40367`, `40369`, `40374`, `40375`, `40368`) is `status: "error"` with its code: data about the market, not a failure of the run
+- `quotes`: one per size: `{ sizeUsd, direction: "USDT->token", amountInRaw, fetchedAt, status: "ok" | "error", code, message, vendorName, executionMode, tradeFee, toTokenAmount, priceImpactPercent, dexes, isHoneyPot, taxRate, effectivePriceUsd }` (`effectivePriceUsd` = sizeUsd ÷ tokens received), plus `vsTokenPricePct`: number or `null`, (effectivePriceUsd ÷ the `binance-w3:rwa-price` token price of the same run − 1) × 100. `priceImpactPercent` is kept exactly as returned; measured on 2026-10-09 it behaves as a fraction (0.9996 came with an effective price 2.9 million times the token price), so it is not converted. `representative`: `true`, `false` or `null` (no cost figure); `false` when `|vsTokenPricePct|` is 5 or more, with `notRepresentativeReason` (string) — such answers are kept as data and must not be shown as a price An RFQ refusal (`40367`, `40369`, `40374`, `40375`, `40368`) is `status: "error"` with its code: data about the market, not a failure of the run
 
 ## Prices
 
@@ -223,7 +224,7 @@ Counts: `{ listed, noCode, genuine, unknown, lookalikes, byRole, byAssetClass }`
 - `listed` — addresses in the family's issuer list (and Binance lists) on chain 56;
 - `noCode` — listed, but no contract at that address on chain 56 (never genuine);
 - `genuine`, `unknown` — verdicts over the listed addresses that have code;
-- `lookalikes` — from the look-alike section;
+- `lookalikes` — unlisted contracts using the family's ticker or name, from the `lookalikes` section;
 - `byRole` — the same counts split by `token` / `wrapper` (xStocks only, otherwise `null`);
 - `byAssetClass` — `{ [assetClass or "not_stated"]: { listed, genuine } }`: dollar tokens
   (`currency`) and portfolios are listed by the issuers next to stocks and ETFs and are counted
@@ -234,7 +235,7 @@ Counts: `{ listed, noCode, genuine, unknown, lookalikes, byRole, byAssetClass }`
 | verdict | meaning |
 |---|---|
 | `genuine` | the address is in the family's issuer list **and** its runtime code hash and its proxy slot (beacon or admin) equal the family rule for its role; when the creator was checked, it matches as well |
-| `look-alike` | not genuine, and the contract claims a family identity on chain: its `symbol()` equals the symbol of a genuine contract of the family (case-insensitive), or its `name()` carries the family marker |
+| `look-alike` | shown as **unlisted contract using the same ticker or name**: on no list, and on chain its `name()` carries the family marker, or its `symbol()` is exactly the symbol of a listed contract (case included) and its name backs it. A claim, not an intent: bridged copies and test deployments are included and sub-labelled by `claimantKind` |
 | `unknown` | neither can be said: listed but the code or slot differs (an outlier, reported rather than forced), the fingerprint matches but the address is not listed, the creator differs, or nothing could be read |
 | `none` | single-address check only: the contract makes no family claim and is not listed |
 

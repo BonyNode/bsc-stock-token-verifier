@@ -114,3 +114,12 @@ test('a single address: listed → its rule; on no list with a copied symbol →
   const down = addressVerdict({ listed: null, facts: { unread: true, codeSize: null }, rules, index });
   assert.deepEqual([down.verdict, down.reasons], ['unknown', ['code_unreadable']]);
 });
+
+test('the kind of claimant is read only from what the contract says about itself', async () => {
+  const { claimantKind } = await import('../src/families.js');
+  assert.equal(claimantKind({ symbol: 'SPYX', name: 'SP500 tokenized ETF (xStock) WormHole' }), 'bridged');
+  assert.equal(claimantKind({ symbol: 't-ABBVon', name: 'Testing AbbVie (Ondo Tokenized)' }), 'test');
+  assert.equal(claimantKind({ symbol: 'NVDAx', name: 'NVIDIA Tokenized Stock (Coinbase)' }), 'other_issuer');
+  assert.equal(claimantKind({ symbol: 'NVDAx', name: 'NVIDIA xStock' }), 'unidentified', 'no guess when the contract says nothing');
+  assert.equal(claimantKind({ symbol: 'TESLAx', name: 'Tesla xStock' }), 'unidentified', 'a ticker that merely starts with TE is not a test');
+});

@@ -14,6 +14,7 @@ const fmt = (n, d = 2) => (n === null || n === undefined || !Number.isFinite(Num
 const usd = (n) => (n === null || n === undefined || !Number.isFinite(Number(n)) ? '—' : `$${fmt(n, Number(n) < 10 ? 4 : 2)}`);
 const time = (iso) => (iso ? `${esc(iso.slice(0, 16).replace('T', ' '))} UTC` : '—');
 const LABEL = { bstocks: 'bStocks', ondo: 'Ondo Stocks', xstocks: 'xStocks' };
+const KIND = { bridged: 'bridged copy', test: 'test contract', other_issuer: 'other issuer', unidentified: 'claimant not identified' };
 const BSCSCAN = (a) => `https://bscscan.com/address/${a}`;
 const addrCell = (a) => `<a class="mono" href="${esc(BSCSCAN(a))}" rel="noopener">${esc(a)}</a>`;
 
@@ -61,7 +62,7 @@ function familyCards(snap) {
     const roles = c.byRole ? `<div class="kv small"><span>tokens</span><span>${c.byRole.token.genuine} genuine of ${c.byRole.token.listed}</span><span>v2 wrappers</span><span>${c.byRole.wrapper.genuine} genuine of ${c.byRole.wrapper.listed}</span></div>` : '';
     return `<div class="card"><h3>${esc(fam.label)}</h3><div class="muted small">${esc(fam.wording)}</div>
 <div class="big ok">${c.genuine}<span class="muted" style="font-size:1rem;font-weight:400"> genuine of ${c.listed} listed</span></div>
-<div class="kv"><span>unknown</span><span class="${c.unknown ? 'warn' : ''}">${c.unknown}</span><span>no code on BSC</span><span>${c.noCode}</span><span>look-alikes found</span><span class="${lk ? 'bad' : ''}">${snap.lookalikes.status === 'skipped' ? 'not searched' : `${snap.summary.lookalikes.lowerBound ? '≥ ' : ''}${lk}`}</span><span>issuer list</span><span class="mono">${esc(fam.issuerList)}</span></div>${roles}</div>`;
+<div class="kv"><span>unknown</span><span class="${c.unknown ? 'warn' : ''}">${c.unknown}</span><span>no code on BSC</span><span>${c.noCode}</span><span>unlisted, same ticker or name</span><span class="${lk ? 'warn' : ''}">${snap.lookalikes.status === 'skipped' ? 'not searched' : `${snap.summary.lookalikes.lowerBound ? '≥ ' : ''}${lk}`}</span><span>issuer list</span><span class="mono">${esc(fam.issuerList)}</span></div>${roles}</div>`;
   }).join('')}</div>`;
 }
 
@@ -79,13 +80,14 @@ function rulesTable(snap) {
 function lookalikesSection(snap) {
   const l = snap.lookalikes;
   if (l.status === 'skipped' || l.status === 'failed') return `<p class="muted">Not run (${esc(l.reason || l.error || l.status)}).</p>`;
-  const counts = Object.entries(l.counts).filter(([k]) => k !== 'total').map(([k, n]) => `${esc(LABEL[k])}: ${n}`).join(' · ');
-  const rows = l.items.map((it) => `<tr data-f="${esc([it.address, it.symbol, it.name, it.claims.genuineSymbol].join(' ').toLowerCase())}"><td>${esc(LABEL[it.claims.family])}</td><td>${esc(it.symbol ?? '—')}</td><td>${esc(it.name ?? '—')}</td><td>${addrCell(it.address)}</td><td>${it.claims.by.map((b) => `<span class="chip">${esc(b)}</span>`).join('')}</td><td>${it.claims.genuineAddress ? addrCell(it.claims.genuineAddress) : '—'}</td><td class="num">${usd(it.search.liquidityUsd)}</td><td class="num">${esc(it.search.holders ?? '—')}</td><td>${esc(it.search.launchPlatform ?? '—')}</td></tr>`).join('');
+  const counts = Object.entries(l.counts).filter(([k]) => LABEL[k]).map(([k, n]) => `${esc(LABEL[k])}: ${n}`).join(' · ');
+  const kinds = l.counts.byKind ? Object.entries(l.counts.byKind).map(([k, n]) => `${esc(KIND[k] || k)}: ${n}`).join(' · ') : '';
+  const rows = l.items.map((it) => `<tr data-f="${esc([it.address, it.symbol, it.name, it.claims.genuineSymbol].join(' ').toLowerCase())}"><td>${esc(LABEL[it.claims.family])}</td><td>${esc(it.symbol ?? '—')}</td><td>${esc(it.name ?? '—')}</td><td>${addrCell(it.address)}</td><td>${it.claims.by.map((b) => `<span class="chip">${esc(b)}</span>`).join('')}</td><td>${esc(KIND[it.claimantKind] || KIND.unidentified)}</td><td>${it.claims.genuineAddress ? addrCell(it.claims.genuineAddress) : '—'}</td><td class="num">${usd(it.search.liquidityUsd)}</td><td class="num">${esc(it.search.holders ?? '—')}</td><td>${esc(it.search.launchPlatform ?? '—')}</td></tr>`).join('');
   const other = l.otherIssuerClaims.length ? `<details><summary>${l.otherIssuerClaims.length} contracts claim an issuer outside the three families (counted, not judged)</summary><div class="scroll"><table><thead><tr><th>Symbol</th><th>Name</th><th>Address</th><th>Query</th></tr></thead><tbody>${l.otherIssuerClaims.map((o) => `<tr><td>${esc(o.symbol ?? '—')}</td><td>${esc(o.name ?? '—')}</td><td>${addrCell(o.address)}</td><td>${esc(o.query)}</td></tr>`).join('')}</tbody></table></div></details>` : '';
-  return `<p><strong>${l.counts.total}</strong> contracts on BNB Smart Chain copy the symbol or the name of a genuine contract (${counts}). ${esc(snap.notices.lookalikeCounts)}</p>
+  return `<p><strong>${l.counts.total}</strong> contracts on BNB Smart Chain use the symbol or the name of an issuer-listed contract without being on the issuer's list (${counts}). By what their own name and symbol say: ${kinds}. This describes a claim, not an intent: bridged copies and test deployments are among them. ${esc(snap.notices.lookalikeCounts)}</p>
 <p class="small muted">${esc(l.method)}. ${l.queries} searches, ${l.fullPages} came back full (${l.pageCap} rows).</p>
 ${src(snap, [l.source, 'bsc-rpc'], l.fetchedAt)}
-<details class="filterable" open><summary>All ${l.items.length} look-alikes</summary><div class="scroll"><table><thead><tr><th>Copies</th><th>symbol()</th><th>name()</th><th>Address</th><th>Claim by</th><th>Genuine contract</th><th class="num">Liquidity*</th><th class="num">Holders*</th><th>Launched on*</th></tr></thead><tbody>${rows}</tbody></table></div>
+<details class="filterable" open><summary>All ${l.items.length} unlisted contracts</summary><div class="scroll"><table><thead><tr><th>Uses the ticker of</th><th>symbol()</th><th>name()</th><th>Address</th><th>Same</th><th>Kind</th><th>Listed contract</th><th class="num">Liquidity*</th><th class="num">Holders*</th><th>Launched on*</th></tr></thead><tbody>${rows}</tbody></table></div>
 <p class="small muted">* as reported by the search at the time of the scan.</p></details>${other}`;
 }
 
@@ -97,12 +99,13 @@ function marketSection(snap) {
     const x = it.quotes.find((y) => y.sizeUsd === size);
     if (!x) return '<td class="num">—</td>';
     if (x.status === 'error') return `<td class="num warn" title="${esc(x.message)}">${esc(x.code ?? 'error')}</td>`;
+    if (x.representative === false) return `<td class="num warn" title="${esc(x.notRepresentativeReason)}">quote not<br>representative</td>`;
     const cost = x.vsTokenPricePct;
     const cls = cost === null || cost === undefined ? 'muted' : (Math.abs(cost) >= 1 ? 'bad' : 'ok');
     return `<td class="num" title="${esc(`${(x.dexes || []).join(', ')}; priceImpactPercent as returned: ${x.priceImpactPercent ?? '—'}; ${x.vendorName ?? ''} ${x.executionMode ?? ''}`)}">${usd(x.effectivePriceUsd)}<br><span class="small ${cls}">${cost === null || cost === undefined ? 'no token price' : `${cost >= 0 ? '+' : ''}${fmt(cost, cost >= 100 ? 0 : 2)}% vs token price`}</span></td>`;
   };
   const rows = m.items.map((it) => `<tr data-f="${esc([it.address, it.symbol, it.underlyingTicker].join(' ').toLowerCase())}"><td>${esc(it.underlyingTicker)}</td><td>${esc(LABEL[it.family])}${it.role === 'wrapper' ? ' <span class="chip">wrapper</span>' : ''}</td><td>${esc(it.symbol)}</td><td>${it.status ? `${esc(it.status.marketStatus ?? '')}${it.status.reasonCode ? ` <span class="chip">${esc(it.status.reasonCode)}</span>` : ''}` : '—'}</td><td class="num">${it.pools?.status === 'ok' ? `${it.pools.count} · ${usd(it.pools.liquidityUsdTotal)}` : esc(it.pools?.status ?? '—')}</td>${m.sizesUsd.map((s) => q(it, s)).join('')}</tr>`).join('');
-  return `<ul>${sessions}</ul><p class="small muted">${esc(m.method)}. Each cell: USD paid per token received, and how far that is from the Binance token price of the same run (red from 1%). Quotes are ${esc(m.quoteToken.symbol)} → token; a refusal shows its code (hover for the message). The placeholder wallet sent as userWalletAddress: <span class="mono">${esc(m.walletPlaceholder)}</span>. Empty pools do not mean untradable: equity routes are quoted by RFQ.</p>
+  return `<ul>${sessions}</ul><p class="small muted">${esc(m.method)}. Each cell: USD paid per token received, and how far that is from the Binance token price of the same run (red from 1%). A cost of 5% or more is shown as "quote not representative" (hover for the reason): such routes ran through thin or mispriced pools for a placeholder wallet; the raw answer is in the snapshot. Quotes are ${esc(m.quoteToken.symbol)} → token; a refusal shows its code (hover for the message). The placeholder wallet sent as userWalletAddress: <span class="mono">${esc(m.walletPlaceholder)}</span>. Empty pools do not mean untradable: equity routes are quoted by RFQ.</p>
 ${src(snap, m.sources, m.fetchedAt)}
 <div class="scroll"><table><thead><tr><th>Ticker</th><th>Family</th><th>Symbol</th><th>Session</th><th class="num">Pools · liquidity</th>${m.sizesUsd.map((s) => `<th class="num">$${s}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
@@ -142,11 +145,11 @@ export function renderReport(snap) {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Stock token check BSC</title>
-<meta name="description" content="Which bStocks, Ondo Stocks and xStocks contracts on BNB Smart Chain are genuine, which are look-alikes — measured from chain state and the issuers' own lists.">
+<meta name="description" content="Which bStocks, Ondo Stocks and xStocks contracts on BNB Smart Chain are the issuers' own, and which unlisted contracts use the same ticker — measured from chain state and the issuers' own lists.">
 <style>${CSS}</style></head><body><main>
 <p class="small muted">stock-token-verifier ${esc(snap.generator.version)}${snap.generator.gitCommit ? ` (${esc(snap.generator.gitCommit)})` : ''} · snapshot ${time(snap.generatedAt)} · BNB Smart Chain block ${esc(snap.chain.block ?? '—')}</p>
 <h1>bStocks, Ondo Stocks and xStocks on BNB Smart Chain: which contracts are genuine</h1>
-<p>A contract is <strong>genuine</strong> when its issuer's list has the address <em>and</em> its runtime code and proxy beacon/admin match the rule measured on every contract of that list. A <strong>look-alike</strong> copies the symbol or the name of a genuine contract without being on the list. Anything in between is <strong>unknown</strong>, with the reason.</p>
+<p>A contract is <strong>genuine</strong> when its issuer's list has the address <em>and</em> its runtime code and proxy beacon/admin match the rule measured on every contract of that list. An <strong>unlisted contract using the same ticker or name</strong> is on no list but uses the exact symbol or the family marker of a listed contract — a bridged copy, a test deployment or another claimant. Anything in between is <strong>unknown</strong>, with the reason.</p>
 <div class="notice">${esc(snap.notices.affiliation)} ${esc(snap.notices.advice)}</div>
 ${familyCards(snap)}
 ${src(snap, ['bsc-rpc', 'xstocks-api', 'ondo-csv', snap.families.bstocks.issuerList], s.measuredAt)}
@@ -156,7 +159,7 @@ ${rulesTable(snap)}
 <p class="small muted">${esc(snap.families.xstocks.fingerprint.method)}.</p>
 ${src(snap, 'bsc-rpc', s.measuredAt)}
 ${notes ? `<h3>Found while measuring</h3><ul class="small">${notes}</ul>` : ''}
-<h2>Look-alikes</h2>
+<h2>Unlisted contracts using the same ticker or name</h2>
 ${lookalikesSection(snap)}
 <h2>Market reality (sample)</h2>
 ${marketSection(snap)}

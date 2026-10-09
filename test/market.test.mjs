@@ -72,3 +72,15 @@ test('the quote cost is measured against the token price of the same run, not ta
   assert.equal(c, null);
   assert.equal(snap.market.items[1].quotes[0].vsTokenPricePct, null, 'no token price, no figure');
 });
+
+test('a quote 5 % or more away from the token price is flagged, with its reason, and keeps its raw values', async () => {
+  const { representativeness, NOT_REPRESENTATIVE_PCT } = await import('../src/scan.js');
+  assert.equal(NOT_REPRESENTATIVE_PCT, 5);
+  assert.deepEqual(representativeness({ status: 'ok', vsTokenPricePct: 0.09 }), { representative: true, notRepresentativeReason: null });
+  const bad = representativeness({ status: 'ok', vsTokenPricePct: 1337.86 });
+  assert.equal(bad.representative, false);
+  assert.match(bad.notRepresentativeReason, /\+1\.34e\+3 %|\+1340 %|cost \+/);
+  assert.equal(representativeness({ status: 'ok', vsTokenPricePct: -7 }).representative, false, 'too cheap is as suspicious as too dear');
+  assert.deepEqual(representativeness({ status: 'error', code: 40374 }), { representative: null, notRepresentativeReason: null });
+  assert.deepEqual(representativeness({ status: 'ok', vsTokenPricePct: null }), { representative: null, notRepresentativeReason: null });
+});

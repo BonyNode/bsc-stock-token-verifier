@@ -16,6 +16,8 @@
 // unrelated projects — "AION" (Aion Finance) against Ondo "AIon", "FX" (FENGXIN) against xStocks
 // "Fx", "BEB" (A Battered Pepe) against bStocks "BEB". A shared ticker alone ("NVDA") is not a claim.
 
+import { CLAIMANT_KINDS } from './schema.js';
+
 export const FAMILIES = Object.freeze({
   bstocks: Object.freeze({
     id: 'bstocks',
@@ -93,6 +95,26 @@ export function claimOf({ symbol, name }, index) {
   if (nameFamilies.includes(family)) by.push('name');
   const twin = bySymbol || (twinBySymbol && twinBySymbol.family === family ? twinBySymbol : null) || index.byName.get(String(name || '').trim().toLowerCase()) || null;
   return { family, by, genuineSymbol: twin ? twin.symbol : null, genuineAddress: twin && twin.family === family ? twin.address : null };
+}
+
+// What can be said about who deployed an unlisted contract that uses a family's ticker or name —
+// read only from what its own name() and symbol() say, never guessed:
+//   bridged       — the name says it is a bridged copy (Wormhole, LayerZero, Axelar, …);
+//   test          — the name starts with "Test"/"Testing", or the symbol with "t-" / "test";
+//   other_issuer  — the name names another issuer of stock-linked tokens;
+//   unidentified  — nothing in the contract says who it is.
+export { CLAIMANT_KINDS };
+export const CLAIMANT_LABELS = Object.freeze({ bridged: 'bridged copy', test: 'test contract', other_issuer: 'other issuer', unidentified: 'claimant not identified' });
+const BRIDGED = /\b(?:wormhole|bridged?|portal|layer\s*zero|axelar|celer|multichain|anyswap|stargate|allbridge|wanchain)\b/i;
+const OTHER_ISSUERS = /\b(?:coinbase|robinhood|kraken|dinari|securitize|swarm|dshares?|gtx)\b/i;
+
+export function claimantKind({ symbol, name }) {
+  const n = String(name || '');
+  const s = String(symbol || '');
+  if (BRIDGED.test(n)) return 'bridged';
+  if (/^\s*test(?:ing)?\b/i.test(n) || /^t-|^test/i.test(s)) return 'test';
+  if (OTHER_ISSUERS.test(n)) return 'other_issuer';
+  return 'unidentified';
 }
 
 /** A ticker shared with a family token, which alone is not a claim (reported as a fact). */

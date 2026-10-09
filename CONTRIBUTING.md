@@ -5,7 +5,7 @@ deliberately small: a verifier, a scan that writes a JSON snapshot, and a static
 
 ## Welcome
 
-- **Look-alike reports.** Open an issue with the address and the output of
+- **Reports of unlisted contracts using a family ticker.** Open an issue with the address and the output of
   `node bin/stv-verify.mjs <address> --json`. If the verifier gets it wrong, that is a bug.
 - **Snapshot updates.** Never edit `data/snapshot.json` by hand: run `node bin/stv-verify.mjs scan`
   and paste the printed summary into the pull request. A change of a family rule (code hash, beacon

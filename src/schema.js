@@ -27,8 +27,15 @@ export const NOTICES = Object.freeze({
   affiliation: 'Independent open-source tool. Not affiliated with, endorsed by or connected with Binance, Ondo Finance or Backed (xStocks).',
   advice: 'Information only, not investment advice. Nothing here is an offer or a recommendation to buy or sell anything.',
   referencePrice: 'Binance documents referencePrice as a per-share figure converted from the on-chain token price, not an official quote of the share. It is shown next to the token price, never as the price of the share.',
-  lookalikeCounts: 'Look-alike counts are lower bounds: each search returns at most one page, and only the queries listed in the method were run.',
+  lookalikeCounts: 'Counts of unlisted contracts using the same ticker or name are lower bounds: each search returns at most one page, and only the queries listed in the method were run.',
 });
+
+// Earlier wordings of a notice that a snapshot written before the change may carry (accepted on read).
+export const NOTICE_HISTORY = Object.freeze({
+  lookalikeCounts: ['Look-alike counts are lower bounds: each search returns at most one page, and only the queries listed in the method were run.'],
+});
+
+export const CLAIMANT_KINDS = Object.freeze(['bridged', 'test', 'other_issuer', 'unidentified']);
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isAddr = (v) => typeof v === 'string' && /^0x[0-9a-f]{40}$/.test(v);
@@ -64,7 +71,7 @@ export function validateSnapshot(snap) {
   need(isObj(snap.chain) && snap.chain.id === 56 && snap.chain.idHex === '0x38', 'chain is 56 / 0x38');
   need(isObj(snap.chain) && orNull(isInt)(snap.chain.block) && Array.isArray(snap.chain.rpcHosts)
     && snap.chain.rpcHosts.every((h) => isStr(h) && !/[/?#@]/.test(h)), 'chain.block and chain.rpcHosts (host names only)');
-  need(isObj(snap.notices) && Object.entries(NOTICES).every(([k, v]) => snap.notices[k] === v), 'notices carry the fixed sentences');
+  need(isObj(snap.notices) && Object.entries(NOTICES).every(([k, v]) => snap.notices[k] === v || (NOTICE_HISTORY[k] || []).includes(snap.notices[k])), 'notices carry the fixed sentences');
 
   need(Array.isArray(snap.sources), 'sources is an array');
   for (const [i, s] of (Array.isArray(snap.sources) ? snap.sources : []).entries()) {
@@ -122,6 +129,7 @@ export function validateSnapshot(snap) {
       need(isAddr(l?.address) && l?.verdict === 'look-alike', `${at} address and verdict`);
       need(isObj(l?.claims) && FAMILY_IDS.includes(l.claims.family) && Array.isArray(l.claims.by) && l.claims.by.length > 0, `${at}.claims`);
       need(Array.isArray(l?.reasons) && l.reasons.every((r) => REASONS.includes(r)), `${at}.reasons`);
+      need(l?.claimantKind === undefined || CLAIMANT_KINDS.includes(l.claimantKind), `${at}.claimantKind is one of ${CLAIMANT_KINDS.join('/')}`);
     }
   }
 
@@ -134,6 +142,7 @@ export function validateSnapshot(snap) {
       const at = `market.items[${i}]`;
       need(isAddr(m?.address) && FAMILY_IDS.includes(m?.family), `${at} address and family`);
       need(Array.isArray(m?.quotes) && m.quotes.every((q) => isNum(q?.sizeUsd) && ['ok', 'error'].includes(q?.status) && orNull(isTs)(q?.fetchedAt ?? null)), `${at}.quotes`);
+      need(m.quotes.every((q) => q.representative === undefined || q.representative === null || (isBool(q.representative) && (q.representative || isStr(q.notRepresentativeReason)))), `${at}.quotes: representative false comes with a reason`);
     }
   }
 

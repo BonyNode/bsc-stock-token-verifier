@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2026 The BonyNode Authors
 // SPDX-License-Identifier: Apache-2.0
 //
-// The full scan: lists → on-chain facts → rules → verdicts → look-alikes → prices → market sample →
+// The full scan: lists → on-chain facts → rules → verdicts → unlisted same-ticker contracts → prices → market sample →
 // snapshot (docs/snapshot-schema.md). Every upstream is recorded in `sources` with what came back;
 // a failing upstream makes its section `failed` or `partial`, never an empty success.
 import fs from 'node:fs';
 import path from 'node:path';
 import { CHAIN_ID, CHAIN_ID_HEX, CHAIN_NAME, hostOf, USDT } from './chain.js';
-import { FAMILIES, FAMILY_ORDER, OTHER_ISSUER_MARKER, claimIndex, claimOf } from './families.js';
+import { CLAIMANT_KINDS, FAMILIES, FAMILY_ORDER, OTHER_ISSUER_MARKER, claimIndex, claimOf, claimantKind } from './families.js';
 import { BinanceApiError, W3_ENDPOINTS, W3_ORIGIN, W3_PREFIX, readBasicInfo, readRwaPrice, readRwaTokens, readTokenSearch } from './binance-web3.js';
 import { PUBLIC_ENDPOINTS } from './binance-public.js';
 import { ONDO_DOCS, XSTOCKS_API, XSTOCKS_PRICE, bareUrl, fetchOndo, fetchXStocks, fetchXStocksQuote } from './issuers.js';
@@ -396,9 +396,31 @@ export function addQuoteCosts(snapshot) {
   const px = new Map((snapshot.prices?.items || []).filter((p) => p.source === 'binance-w3:rwa-price' && Number(p.tokenPrice) > 0).map((p) => [p.address, Number(p.tokenPrice)]));
   for (const it of snapshot.market?.items || []) {
     const ref = px.get(it.address) ?? null;
-    for (const q of it.quotes || []) q.vsTokenPricePct = q.status === 'ok' && q.effectivePriceUsd && ref ? (q.effectivePriceUsd / ref - 1) * 100 : null;
+    for (const q of it.quotes || []) {
+      q.vsTokenPricePct = q.status === 'ok' && q.effectivePriceUsd && ref ? (q.effectivePriceUsd / ref - 1) * 100 : null;
+      Object.assign(q, representativeness(q));
+    }
   }
   return snapshot;
+}
+
+export const NOT_REPRESENTATIVE_PCT = 5;
+
+/**
+ * Is a successful quote a fair picture of the market? Measured on 2026-10-09 (docs/devex-
+ * observations.md): costs of 5 % and more came from routes through thin or mispriced pools found
+ * for a placeholder wallet — the SPYon cost rose smoothly from +0.9 % at 20 USD to +1 338 % at
+ * 1 000 USD on one PancakeSwap V3 route; an AMZNon quote of +31.5 % was +0.1 % twelve minutes later
+ * when an RFQ maker joined; Ondo says its RFQ quotes need a user wallet. Such an answer is kept as
+ * data and flagged, never printed as a price.
+ */
+export function representativeness(q) {
+  if (q.status !== 'ok' || q.vsTokenPricePct === null || q.vsTokenPricePct === undefined) return { representative: null, notRepresentativeReason: null };
+  if (Math.abs(q.vsTokenPricePct) < NOT_REPRESENTATIVE_PCT) return { representative: true, notRepresentativeReason: null };
+  return {
+    representative: false,
+    notRepresentativeReason: `cost ${q.vsTokenPricePct >= 0 ? '+' : ''}${q.vsTokenPricePct.toPrecision(3)} % against the token price (threshold ${NOT_REPRESENTATIVE_PCT} %): the route found for a placeholder wallet runs through thin or mispriced pools; an eligible wallet may be quoted differently (RFQ), which this tool cannot test`,
+  };
 }
 
 // ── Look-alike scan ─────────────────────────────────────────────────────────────────────────────
@@ -449,7 +471,7 @@ async function scanLookalikes({ scope, tokens, genuineSet, index, w3, pub, rpc, 
       return null;
     }
   };
-  say(`look-alikes: ${queries.length} searches on ${sourceId}`);
+  say(`same-ticker search: ${queries.length} searches on ${sourceId}`);
   for (const [i, q] of queries.entries()) {
     const rows = await run(q);
     // A full page may hide more: search the family symbols of this ticker as well.
@@ -463,7 +485,7 @@ async function scanLookalikes({ scope, tokens, genuineSet, index, w3, pub, rpc, 
   const looksLikeClaim = (r) => (r.symbol && genuineSymbolsLower.has(r.symbol.trim().toLowerCase()))
     || /xstock|ondo|bstock/i.test(r.name || '') || (r.name && OTHER_ISSUER_MARKER.test(r.name));
   const candidates = [...seen.values()].filter(({ row }) => !genuineSet.has(row.address) && looksLikeClaim(row));
-  say(`look-alikes: ${seen.size} distinct contracts in the results, ${candidates.length} candidates to read on chain`);
+  say(`same-ticker search: ${seen.size} distinct contracts in the results, ${candidates.length} candidates to read on chain`);
   let facts = new Map();
   if (candidates.length) {
     try { facts = (await readOnchain(candidates.map((c) => c.row.address), { rpc, cache: openCache(cacheFile) })).facts; } catch (error) { errors.push(`on-chain read of candidates: ${scrub(error).slice(0, 120)}`); }
@@ -485,12 +507,13 @@ async function scanLookalikes({ scope, tokens, genuineSet, index, w3, pub, rpc, 
       address: row.address, symbol: claimant.symbol, name: claimant.name, claims: claim,
       onchain: { readAt: f.readAt, codeSize: f.codeSize, codeHash: f.codeHash },
       search: { query, liquidityUsd: row.liquidityUsd ?? null, holders: row.holders ?? null, launchPlatform: row.launchPlatform ?? null, isRecognized: row.isRecognized ?? null },
+      claimantKind: claimantKind(claimant),
       verdict: 'look-alike', reasons,
     });
   }
   items.sort((a, b) => a.claims.family.localeCompare(b.claims.family) || String(a.claims.genuineSymbol ?? a.symbol).localeCompare(String(b.claims.genuineSymbol ?? b.symbol)) || a.address.localeCompare(b.address));
-  const counts = { bstocks: 0, ondo: 0, xstocks: 0, total: items.length };
-  for (const it of items) counts[it.claims.family] += 1;
+  const counts = { bstocks: 0, ondo: 0, xstocks: 0, total: items.length, byKind: Object.fromEntries(CLAIMANT_KINDS.map((k) => [k, 0])) };
+  for (const it of items) { counts[it.claims.family] += 1; counts.byKind[it.claimantKind] += 1; }
   const fetchedAt = now();
   const status = errors.length ? (ran > errors.length ? 'partial' : 'failed') : 'ok';
   const usedId = keyed ? 'binance-w3:token-search' : 'binance-public:token-search';
@@ -500,7 +523,7 @@ async function scanLookalikes({ scope, tokens, genuineSet, index, w3, pub, rpc, 
   if (status === 'failed') return { ...base, source: usedId, status, reason: null, error: errors[0], fetchedAt, queries: ran, method: 'search failed' };
   return {
     ...base, source: usedId, status, reason: null, error: errors[0] ?? null, errors, fetchedAt, queries: ran, fullPages, lowerBound: true,
-    method: `one search on chain 56 per underlying ticker of the ${scope === 'all' ? 'family' : 'Binance-listed'} contracts, plus "xStock", "Ondo Tokenized" and "bStocks"; when a page came back full, also the family symbols of that ticker. A result is a look-alike when it is on no list and either its own name() carries the family marker ("xStock", "(Ondo Tokenized)"), or its own symbol() is exactly the symbol of a genuine family contract (case included) and its name repeats that symbol or shares a distinctive word with the genuine name`,
+    method: `one search on chain 56 per underlying ticker of the ${scope === 'all' ? 'family' : 'Binance-listed'} contracts, plus "xStock", "Ondo Tokenized" and "bStocks"; when a page came back full, also the family symbols of that ticker. A result counts as an unlisted contract using the same ticker or name when it is on no list and either its own name() carries the family marker ("xStock", "(Ondo Tokenized)"), or its own symbol() is exactly the symbol of a genuine family contract (case included) and its name repeats that symbol or shares a distinctive word with the genuine name. The kind of claimant (bridged copy, test contract, other issuer) is read from the contract's own name and symbol only; otherwise it is "not identified"`,
     counts, items, otherIssuerClaims,
   };
 }

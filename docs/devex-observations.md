@@ -47,6 +47,32 @@ interpretation beyond what the response shows. Times are from the machine that m
 | same response | display names | the search shows `NVIDIA (bStocks)` for `0x02fca66c1d1afb4e2a7884261eb00f63598a7436`, whose own `name()` is `NVIDIA Corp`; `NVIDIA (Ondo)` for the Ondo token whose `name()` ends in `(Ondo Tokenized)` | names in Binance responses are display names, not the contract's claim |
 | ~2026-10-09T15:59:31Z | `GET https://www.binance.com/bapi/defi/v1/public/wallet-direct/buw/wallet/market/token/rwa/market/status/ai` | `{"marketStatus":"regular","openState":true,"nextOpen":"2026-10-09T20:01:00Z","nextClose":"2026-10-09T19:59:00Z","offhours":{"openState":false,"nextOpenTime":1791590760000,"nextCloseTime":1791762900000}}` | `offhours` = 2026-10-10T00:06:00Z → 2026-10-11T23:55:00Z; the `offhours` block is not in the skill document |
 
+## The Ondo quotes at larger sizes (investigated 2026-10-09T17:23Z, US regular session)
+
+Question: are the +14.7 % … +1 337 % costs at 1 000 USD (and MSFTon at every size) caused by the
+placeholder wallet, by amount units, or by thin liquidity? 29 signed requests, 17:23:02Z–17:23:21Z.
+
+| UTC | Request | Response | Reading |
+|---|---|---|---|
+| 17:23:07.562Z | quote USDT → SPYon, 1 000 USD, **without** `userWalletAddress` | HTTP 200, `code 40001`, `userWalletAddress is required for RFQ (Ondo) quote` | the API itself says Ondo quotes are meant to be RFQ quotes for a user wallet |
+| 17:23:07.948Z / 17:23:08.505Z | same with `userWalletAddress=0x…0001` / `0x…dead` | both HTTP 200 `code 0`, identical answers: `vendorName "LiquidMesh"`, `executionMode "SWAP"`, route `Pancakeswap V3 100.00%`, `toTokenAmount "88582468681134219"`, `priceImpactPercent "0.9305537281"` → 11 288.92 USD per token against a token price of 785.12 | the choice between two neutral addresses changes nothing; a wallet eligible for Ondo's RFQ (a real, onboarded user) cannot be tested by this tool |
+| 17:23:09.048Z | quote USDT → MSFTon, 20 USD, without wallet | `code 40001`, same message | |
+| 17:23:09.330Z / 17:23:09.864Z | same with `0x…0001` / `0x…dead` | `code 0`; routes `Rfq Halfmoon → Uniswap V4` (2 hops via USDC) / `Rfq Halfmoon → Rfq Halfmoon → Uniswap V4` (3 hops via WBNB, USDC); both `priceImpactPercent "0.9996010001"`, `toTokenAmount "12634231323"` (1.26e-8 MSFTon for 20 USDT) | the last leg is a Uniswap V4 pool priced about 3 million times off; the aggregator returns it with `code 0` |
+| 17:23:10Z–17:23:13Z | SPYon size ladder 20 / 50 / 100 / 200 / 500 / 1 000 USD (`0x…dead`) | always route `Pancakeswap V3 100.00%`, one hop; cost against the token price +0.88 / +3.44 / +61.6 / +200.7 / +626.4 / +1 337.9 %; `priceImpactPercent` 0.0102 / 0.0347 / 0.3819 / 0.6679 / 0.8625 / 0.9306 | a smooth, monotonic rise on one AMM route: a thin pool, not a unit error |
+| 17:23:14Z–17:23:17Z | AMZNon size ladder, same sizes | route changes with size: Topaz CL + PancakeSwap (20) → `Rfq Newworld`/`Rfq Halfmoon` + PancakeSwap V2 (50–500) → `Rfq Bebop 100.00%` direct (1 000); cost +1.21 / +2.14 / +3.69 / +6.79 / +16.07 / **+0.096 %** | the same 1 000 USD quote cost +31.5 % twelve minutes earlier (17:11Z): RFQ makers join and leave the route minute by minute |
+| 17:23:18Z–17:23:20Z | NVDAon size ladder (control) | cost +0.005 / +0.014 / +0.019 / +0.034 / +0.059 / +0.070 %; at 500 and 1 000 USD the route is `Rfq Neptunex` to NVDAB, then `Uniswap V4` NVDAB → NVDAon | the cheapest Ondo route ran through the bStocks token |
+| 17:23:21Z | `top-liquidity` for SPYon, AMZNon, MSFTon, NVDAon | 5 / 4 / 4 / 9 pools; **every** `liquidityUsd` is `null` and every `liquidityAmount[].tokenAmount` is `null`; protocols `Bebop`, `Native` (RFQ venues) or `null`, plus a pool against USDon | the PancakeSwap V3 pool that carried the SPYon route is not among them; the pools endpoint gives no depth to compare with |
+| all quotes of the day | `executionMode` | always `"SWAP"`, even when every leg of `dexRouterList` is an `Rfq …` venue | RFQ makers appear as route legs inside a SWAP answer |
+
+Units ruled out: the same amount encoding (USDT, 18 decimals) gives correct prices for every bStocks
+size and for Ondo at 20 USD; the distortions (×14.4, ×2.9 million) are not powers of ten.
+
+Interpretation used in the snapshot: a successful quote whose cost against the token price of the
+same run is 5 % or more is marked `representative: false`. It is a real answer of the aggregator
+for a placeholder wallet at that moment, but it says more about a thin or mispriced pool on the
+route than about the price an eligible wallet would be quoted. The report prints "quote not
+representative" with the reason instead of the number; the raw answer stays in the snapshot.
+
 ## Brief vs live chain
 
 | UTC | Request | Response | Note |
