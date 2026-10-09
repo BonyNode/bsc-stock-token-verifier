@@ -77,6 +77,7 @@ Source ids:
 | `xstocks-api` | issuer | `https://api.xstocks.fi/api/v2/public/assets` (all pages; BSC deployments) |
 | `xstocks-price` | issuer | `https://api.xstocks.fi/api/v2/public/assets/{symbol}/price-data` (token quote, no timestamp) |
 | `ondo-csv` | issuer | the token CSV linked from `https://docs.ondo.finance/addresses` |
+| `binance-w3:rwa-platforms` | binance-web3-api | `GET /api/v1/dex/market/rwa/platforms` (token counts per platform on chain 56) |
 | `binance-w3:rwa-tokens` | binance-web3-api | `GET /api/v1/dex/market/rwa/tokens` (platformId `bstock` and `ondo`) |
 | `binance-w3:rwa-price` | binance-web3-api | `GET /api/v1/dex/market/rwa/price` |
 | `binance-w3:basic-info` | binance-web3-api | `POST /api/v1/dex/market/token/basic-info` (creator) |
@@ -108,6 +109,7 @@ Source ids:
 | `block` | integer | block at the start of the pass |
 | `method` | string | how the rule was derived |
 | `roles` | object | `{ token: RoleRule }`, plus `wrapper: RoleRule` for xStocks (ERC-4626 v2 wrappers) |
+| `creators` | `{ address, members }[]` | every address that created an issuer-listed contract fitting the rule (from `binance-w3:basic-info`); empty when creators were not read |
 
 RoleRule:
 
@@ -120,7 +122,9 @@ RoleRule:
 | `slotValue` | string | its value (an address) shared by the members |
 | `members` | integer | listed contracts of this role that match both |
 | `implementations` | `{ address, count }[]` | distribution of the EIP-1967 implementation slot (reported, not part of the rule: an issuer may upgrade tokens one by one) |
-| `outliers` | integer | listed contracts of this role with code that matches neither the hash nor the slot |
+| `outliers` | integer | listed contracts of this role with code that do not fit the rule (hash or slot differs) |
+| `clusters` | `{ codeHash, count }[]` | every code hash among the listed contracts of this role |
+| `majority` | boolean | the rule's code hash is shared by more than half of them |
 
 ## Token
 
@@ -148,7 +152,7 @@ One entry per address. Ordered by family, then symbol.
 
 | Field | Type | Content |
 |---|---|---|
-| `status`, `reason`, `error` | | as above |
+| `status`, `reason`, `error`, `errors` | | as above; `errors` lists every failed query |
 | `source` | string | `binance-w3:token-search` or `binance-public:token-search` |
 | `fetchedAt` | timestamp \| null | when the last search completed |
 | `method` | string | which queries were run and how a claim is decided |
@@ -166,9 +170,9 @@ Lookalike:
 |---|---|---|
 | `address` | string | |
 | `symbol`, `name` | string \| null | on-chain `symbol()`, `name()` (what the contract claims) |
-| `claims` | object | `{ family, by, genuineSymbol, genuineAddress }`; `by`: `["symbol"]`, `["name"]` or both |
+| `claims` | object | `{ family, by, genuineSymbol, genuineAddress }`; `by`: `["symbol"]`, `["name"]` or both. `symbol`: `symbol()` is exactly a genuine symbol (case included) and the name repeats it or shares a distinctive word with the genuine name; `name`: `name()` carries the family marker |
 | `onchain` | object \| null | `{ readAt, codeSize, codeHash }` |
-| `search` | object | `{ query, liquidityUsd, holders, launchPlatform }` as the search reported them (strings or `null`) |
+| `search` | object | `{ query, liquidityUsd, holders, launchPlatform, isRecognized }` as the search reported them (strings, booleans or `null`) |
 | `verdict` | string | `look-alike` |
 | `reasons` | string[] | |
 
@@ -185,14 +189,14 @@ Sampled, never the whole set: requests to the aggregator are expensive and equit
 | `sizesUsd` | number[] | `[20, 100, 1000]` |
 | `quoteToken` | object | `{ symbol: "USDT", address, decimals }` |
 | `walletPlaceholder` | string \| null | the neutral address passed as `userWalletAddress` (RFQ routes require one); never a real user wallet |
-| `sessions` | object[] | market-wide state when sampled: `{ family, source, fetchedAt, openState, marketStatus, reasonCode, nextOpenAt, nextCloseAt }` |
+| `sessions` | object[] | market-wide state when sampled: `{ family, source, fetchedAt, openState, marketStatus, reasonCode, nextOpenAt, nextCloseAt, offhours }` (`offhours`: `{ openState, nextOpenAt, nextCloseAt }` or `null`) |
 | `items` | MarketItem[] | |
 
 MarketItem: `{ address, family, symbol, status, pools, quotes }`
 
 - `status`: `{ source, fetchedAt, openState, marketStatus, reasonCode, nextOpenAt, nextCloseAt }` or `null`
 - `pools`: `{ source, fetchedAt, status, count, liquidityUsdTotal, top: [{ protocolName, poolAddress, liquidityUsd }] }`. An empty pool list does not mean untradable: equity liquidity is quoted by RFQ
-- `quotes`: one per size: `{ sizeUsd, direction: "USDT->token", amountInRaw, fetchedAt, status: "ok" | "error", code, message, toTokenAmount, priceImpactPercent, dexes, isHoneyPot, taxRate, effectivePriceUsd }`. An RFQ refusal (`40367`, `40369`, `40374`, `40375`, `40368`) is `status: "error"` with its code: data about the market, not a failure of the run
+- `quotes`: one per size: `{ sizeUsd, direction: "USDT->token", amountInRaw, fetchedAt, status: "ok" | "error", code, message, vendorName, executionMode, tradeFee, toTokenAmount, priceImpactPercent, dexes, isHoneyPot, taxRate, effectivePriceUsd }` (`effectivePriceUsd` = sizeUsd ÷ tokens received). An RFQ refusal (`40367`, `40369`, `40374`, `40375`, `40368`) is `status: "error"` with its code: data about the market, not a failure of the run
 
 ## Prices
 
@@ -214,13 +218,16 @@ PriceItem: `{ address, family, symbol, source, fetchedAt, tokenPrice, referenceP
 
 `{ measuredAt, keyUsed, families: { bstocks: Counts, ondo: Counts, xstocks: Counts }, lookalikes: { total, lowerBound } }`
 
-Counts: `{ listed, noCode, genuine, unknown, lookalikes, byRole }`
+Counts: `{ listed, noCode, genuine, unknown, lookalikes, byRole, byAssetClass }`
 
 - `listed` — addresses in the family's issuer list (and Binance lists) on chain 56;
 - `noCode` — listed, but no contract at that address on chain 56 (never genuine);
 - `genuine`, `unknown` — verdicts over the listed addresses that have code;
 - `lookalikes` — from the look-alike section;
-- `byRole` — the same counts split by `token` / `wrapper` (xStocks only, otherwise `null`).
+- `byRole` — the same counts split by `token` / `wrapper` (xStocks only, otherwise `null`);
+- `byAssetClass` — `{ [assetClass or "not_stated"]: { listed, genuine } }`: dollar tokens
+  (`currency`) and portfolios are listed by the issuers next to stocks and ETFs and are counted
+  here separately.
 
 ## Verdicts
 
