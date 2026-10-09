@@ -484,7 +484,7 @@ async function scanLookalikes({ scope, tokens, genuineSet, index, w3, pub, rpc, 
     items.push({
       address: row.address, symbol: claimant.symbol, name: claimant.name, claims: claim,
       onchain: { readAt: f.readAt, codeSize: f.codeSize, codeHash: f.codeHash },
-      search: { query, liquidityUsd: row.liquidityUsd ?? null, holders: row.holders ?? null, launchPlatform: row.launchPlatform ?? null },
+      search: { query, liquidityUsd: row.liquidityUsd ?? null, holders: row.holders ?? null, launchPlatform: row.launchPlatform ?? null, isRecognized: row.isRecognized ?? null },
       verdict: 'look-alike', reasons,
     });
   }

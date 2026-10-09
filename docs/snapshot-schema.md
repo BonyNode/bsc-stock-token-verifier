@@ -172,7 +172,7 @@ Lookalike:
 | `symbol`, `name` | string \| null | on-chain `symbol()`, `name()` (what the contract claims) |
 | `claims` | object | `{ family, by, genuineSymbol, genuineAddress }`; `by`: `["symbol"]`, `["name"]` or both. `symbol`: `symbol()` is exactly a genuine symbol (case included) and the name repeats it or shares a distinctive word with the genuine name; `name`: `name()` carries the family marker |
 | `onchain` | object \| null | `{ readAt, codeSize, codeHash }` |
-| `search` | object | `{ query, liquidityUsd, holders, launchPlatform, isRecognized }` as the search reported them (strings, booleans or `null`) |
+| `search` | object | `{ query, liquidityUsd, holders, launchPlatform, isRecognized }` as the search reported them (strings, booleans or `null`); `isRecognized` is written from the scan after the 2026-10-09 17:12 UTC snapshot, which does not have it |
 | `verdict` | string | `look-alike` |
 | `reasons` | string[] | |
 
