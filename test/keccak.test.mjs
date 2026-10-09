@@ -3,8 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { keccak256Hex, keccak256Text, selector, hexToBytes } from '../src/keccak.js';
-import { CODE_HASH } from '../src/registry.js';
-import { NVDA, FAKE_NVDA } from './fixtures/chain.mjs';
+import { AEHRX, FAKE_NVDAX, NVDAB } from './fixtures/bsc.mjs';
 
 // Reference values computed with an independent, audited implementation.
 test('keccak256 matches reference vectors, including every padding edge of the 136-byte rate', () => {
@@ -21,19 +20,20 @@ test('it is Keccak, not SHA3-256: the empty-input hashes differ', async () => {
   assert.notEqual(keccak256Text(''), `0x${createHash('sha3-256').update('').digest('hex')}`);
 });
 
-test('the live bytecode of the genuine NVDA hashes to the reference, the counterfeit does not', () => {
-  assert.equal(keccak256Hex(NVDA.code), CODE_HASH);
-  assert.equal(keccak256Hex(FAKE_NVDA.code), '0xb3e93523522c7151dcb0c2ad7022221cb56e7dbc8c7a304c0cc71d8e948f09e8');
+test('the live bytecode of bStocks NVDAB and xStocks AEHRx hashes to the measured values; the look-alike does not', () => {
+  assert.equal(keccak256Hex(NVDAB.code), NVDAB.codeHash);
+  assert.equal(keccak256Hex(AEHRX.code), AEHRX.codeHash);
+  assert.equal(keccak256Hex(FAKE_NVDAX.code), '0x63ad5291cdef5d82cddf8e5d8d4c48bd6ad1de2394616ab66a6c6c6cceae63bb');
   assert.equal(keccak256Hex('0x'), keccak256Text(''), 'an empty account hashes like empty input');
 });
 
 test('function selectors are derived, not copied', () => {
-  assert.equal(selector('uiMultiplier()'), '0xa60bf13d');
   assert.equal(selector('symbol()'), '0x95d89b41');
   assert.equal(selector('name()'), '0x06fdde03');
   assert.equal(selector('decimals()'), '0x313ce567');
-  // The genuine runtime code asks its beacon for implementation(): the proxy pattern is visible in the bytes.
-  assert.ok(NVDA.code.includes(selector('implementation()').slice(2)));
+  // The bStocks runtime code asks its beacon for implementation(), and the beacon address is in the bytes.
+  assert.ok(NVDAB.code.includes(selector('implementation()').slice(2)));
+  assert.ok(NVDAB.code.includes(NVDAB.beacon.slice(2)));
 });
 
 test('hexToBytes rejects what is not hex', () => {

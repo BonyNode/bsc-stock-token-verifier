@@ -2,19 +2,17 @@
 // SPDX-FileCopyrightText: 2026 The BonyNode Authors
 // SPDX-License-Identifier: Apache-2.0
 //
-// Pre-publication check: nothing in this repository may carry private working material, secrets,
-// or wording the chain's terms do not allow.
+// Pre-publication check: nothing in this repository may carry private working material, secrets
+// (Binance Web3 API keys and signatures included), or a call to buy.
 //
 //   node scripts/check-clean.mjs          self-test, then scan every file in the working tree
 //
 // What is checked, per file and per line:
 //   · absolute local paths and private IP ranges;
-//   · anything shaped like a credential (private keys, API tokens, key assignments);
-//   · non-English text (this repository is English-only);
-//   · terminology: the assets are "Stock Tokens" — the family of words meaning "securities issued as
-//     tokens" is not used for them, in any of six languages; the issuer's stock ticker is not
-//     mentioned in material about the chain; the chain is always "Robinhood Chain", never abbreviated
-//     and never an informal or unofficial variant of the name;
+//   · anything shaped like a credential (private keys, API tokens, key assignments), Binance Web3
+//     API key values and signing-header values;
+//   · non-English text (this repository is English-only; contract names in data are \u-escaped);
+//   · calls to buy or invest: the output is information only, not investment advice;
 //   · file names that should never be committed (.env*, keys, databases).
 //
 // Rules about a maintainer's own environment (host names, ports, directory names, ticket numbers)
@@ -47,27 +45,15 @@ export const RULES = [
     hit: [j('const priv = "0x', 'ab'.repeat(32), '"')], miss: [j('codeHash: 0x', 'ab'.repeat(32))] },
   { id: 'non-english', re: /[\u0400-\u04ff]/,
     hit: ['\u0436'], miss: ['Stock Tokens'] },
-  { id: 'terminology-en', re: /toke\x6ei[sz]/i, hit: [j('these toke', 'nized shares')], miss: ['Stock Tokens', 'tokens'] },
-  { id: 'terminology-de', re: /toke\x6eisier/i, hit: [j('ein Katalog toke', 'nisierter Aktien')], miss: ['Stock Tokens'] },
-  { id: 'terminology-fr', re: /tok\u00e9\x6eis|toke\x6eis[e\u00e9]/i, hit: [j('actions toke', 'nis\u00e9es'), j('tok\u00e9', 'nisation')], miss: ['Stock Tokens'] },
-  { id: 'terminology-es', re: /toke\x6eizad|toke\x6eizaci/i, hit: [j('acciones toke', 'nizadas')], miss: ['Stock Tokens'] },
-  { id: 'terminology-zh', re: /\u4ee3\u5e01\u5316|\u901a\u8bc1\u5316/, hit: ['\u94fe\u4e0a\u4ee3\u5e01\u5316\u80a1\u7968\u76ee\u5f55'], miss: ['Stock Tokens'] },
-  { id: 'terminology-ar', re: /\u0645\u0631\u0645\u0632|\u062a\u0631\u0645\u064a\u0632/,
-    hit: ['\u0643\u062a\u0627\u0644\u0648\u062c \u0627\u0644\u0623\u0633\u0647\u0645 \u0627\u0644\u0645\u0631\u0645\u0632\u0629'], miss: ['Stock Tokens'] },
-  // The issuer's ticker. A bare search would hit the chain's own name in every URL, so the brand is
-  // removed first and only a standalone four-letter word (or its dollar form) is looked for.
-  { id: 'issuer-ticker', line: (l) => { const s = l.replace(/robinhood/gi, ' '); return /(^|[^A-Za-z])\x48OOD([^A-Za-z]|$)/.test(s) || /\$\x48OOD/i.test(s); },
-    hit: [j('chain volume beats H', 'OOD revenue'), j('see $H', 'OOD')], miss: ['Robinhood Chain · rpc.mainnet.chain.robinhood.com', 'ROBINHOOD CHAIN'] },
-  // The chain is named in full. Its three-letter abbreviation is looked for as a word of its own,
-  // also inside identifiers such as an environment variable prefix or a command name.
-  { id: 'chain-abbreviation', re: /(^|[^A-Za-z0-9])\x72hc(?![A-Za-z])/i,
-    hit: [j('R', 'HC_ENDPOINT'), j('bin/r', 'hc-tool'), j('bridged to R', 'HC')], miss: ['Robinhood Chain', 'STV_RPC_URLS', 'robinhoodchain.blockscout.com'] },
-  // The chain's terms prohibit the shorthand and any other abbreviated, informal or unofficial variant
-  // of its name in external-facing material. The variants are looked for as words of their own — a
-  // shortened brand, its initials, or its first half, before "chain" — also inside identifiers.
-  { id: 'chain-informal-name', re: /(^|[^A-Za-z0-9])(?:\x68ood|\x72h|\x72obin)[\s_.-]*chain(?![A-Za-z])/i,
-    hit: [j('Ho', 'od Chain'), j('Ho', 'odChain'), j('R', 'H Chain'), j('R', 'H_CHAIN_ID'), j('Robin Ho', 'od Chain'), j('Robin', ' Chain')],
-    miss: ['Robinhood Chain', 'robinhoodchain.blockscout.com', 'docs.robinhood.com/chain/contracts', 'a neighbourhood chain store'] },
+  // Binance Web3 API credentials as they would appear in a pasted env file, a log or a fixture: the
+  // variable with a value, or a signing header with its value.
+  { id: 'binance-key-value', secret: true, re: /\bBINANCE_W3_(?:API|SECRET)_KEY\s*[:=]\s*['"]?[A-Za-z0-9+/=_-]{16,}/,
+    hit: [j('BINANCE_W3_', 'SECR', 'ET_KEY=', 'Zm9v'.repeat(6))], miss: ['a file with BINANCE_W3_API_KEY= lines'] },
+  { id: 'binance-header-value', secret: true, re: /x-oc-(?:sign|apikey)['"]?\s*[:=]\s*['"]?[A-Za-z0-9+/=_-]{20,}/i,
+    hit: [j('X-OC-', 'SIGN: ', 'q83vEjRWeJ'.repeat(3), '=')], miss: ["'X-OC-APIKEY': apiKey,", "'X-OC-SIGN': signRequest({ secretKey })"] },
+  // Information only: no call to buy or to invest, anywhere in the repository.
+  { id: 'call-to-buy', re: /\b(?:buy|invest)\s+(?:now|today|here)\b|\bguaranteed\s+(?:returns?|profits?)\b|\bto\s+the\s+moon\b/i,
+    hit: [j('Buy ', 'now before it is gone'), j('guaranteed ', 'returns')], miss: ['Nothing here is an offer or a recommendation to buy or sell anything.'] },
 ];
 
 export const FORBIDDEN_FILES = /(^|\/)(?:\.env(?:\..*)?|id_[a-z0-9]+|.*\.(?:pem|key|p12|db|sqlite|sqlite3))$/i;
@@ -138,7 +124,7 @@ export function selfTest(rules = RULES) {
     for (const s of rule.miss) if (test(rule, s)) problems.push(`${rule.id} fires on an allowed text`);
   }
   for (const name of ['.env', '.env.local', 'keys/id_ed25519', 'deploy.pem', 'cache.db']) if (!FORBIDDEN_FILES.test(name)) problems.push(`forbidden-file misses ${name}`);
-  for (const name of ['README.md', 'data/stock-tokens.snapshot.json', 'src/keccak.js']) if (FORBIDDEN_FILES.test(name)) problems.push(`forbidden-file fires on ${name}`);
+  for (const name of ['README.md', 'data/snapshot.json', 'src/keccak.js']) if (FORBIDDEN_FILES.test(name)) problems.push(`forbidden-file fires on ${name}`);
   return problems;
 }
 

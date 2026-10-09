@@ -1,21 +1,20 @@
 // SPDX-FileCopyrightText: 2026 The BonyNode Authors
 // SPDX-License-Identifier: Apache-2.0
 //
-// Robinhood Chain (chain id 4663): network constants and the ERC-8056 corporate-action multiplier.
-// Pure module: nothing here touches the network.
+// BNB Smart Chain (chain id 56): network constants. Pure module: nothing here touches the network.
 
-export const CHAIN_ID = 4663;
-export const CHAIN_ID_HEX = '0x1237';
+export const CHAIN_ID = 56;
+export const CHAIN_ID_HEX = '0x38';
+export const CHAIN_NAME = 'BNB Smart Chain';
 
-// Third-party public JSON-RPC endpoints that answered eth_chainId → 0x1237 when this list was
-// written (2026-09-20). The official Robinhood Chain Public RPC is deliberately NOT a default: the
-// Robinhood Chain Terms of Service (§2.4) limit its use to "lawful testing, experimentation,
-// evaluation, and development purposes". Operators can still add it, or their own provider, via
-// STV_RPC_URLS.
-export const OFFICIAL_RPC = 'https://rpc.mainnet.chain.robinhood.com';
+// Public JSON-RPC endpoints that answered a batch of 24 eth_getCode calls on chain 0x38 when this
+// list was written (2026-10-09). The first is the public endpoint published by BNB Chain. (A free
+// drpc.org endpoint refuses batches of more than 3 calls, so it is not a default.) Operators add
+// their own provider through STV_RPC_URLS.
 export const DEFAULT_RPCS = Object.freeze([
-  'https://robinhood-rpc.publicnode.com',
-  'https://robinhood.rpc.blxrbdn.com',
+  'https://bsc-dataseed.bnbchain.org',
+  'https://bsc-rpc.publicnode.com',
+  'https://bsc-dataseed1.binance.org',
 ]);
 
 /** STV_RPC_URLS (comma-separated) first, the built-in public endpoints after it. */
@@ -24,62 +23,26 @@ export function rpcUrlsFromEnv(env = process.env) {
   return [...own, ...DEFAULT_RPCS.filter((url) => !own.includes(url))];
 }
 
-export const EXPLORER = 'https://robinhoodchain.blockscout.com';
-
-// ── Corporate-action multiplier (ERC-8056) ────────────────────────────────────────────────────
-// A Stock Token never rebases: raw balances and totalSupply never change. Dividends and splits are
-// expressed by uiMultiplier(), a fixed-point number with 18 decimals (1e18 = 1.0). The scale is a
-// constant of the specification: uiMultiplierDecimals() does not exist on chain (the call reverts
-// on every token), so there is nothing to read it from.
-//
-// Two different prices must not be confused:
-//   • token price — what the Chainlink feed and an on-chain swap report. The multiplier is already
-//     inside it; applying it again would count the dividend twice.
-//   • share price — what ONE underlying share costs. It is the token price DIVIDED by the multiplier.
-// Multiplying instead of dividing, or not applying the multiplier at all, both produce plausible
-// numbers at today's multipliers (1.0 to 1.0051), which is why the direction is pinned by tests.
-export const UI_MULTIPLIER_SCALE = 10n ** 18n;
-
-export function toBigInt(v) {
-  if (typeof v === 'bigint') return v;
-  if (typeof v === 'number') return Number.isSafeInteger(v) ? BigInt(v) : null;
-  if (typeof v === 'string' && /^(0x[0-9a-fA-F]+|\d+)$/.test(v.trim())) return BigInt(v.trim());
-  return null;
+/** Host name of an endpoint, never its path, query or credentials (a provider URL can carry a key). */
+export function hostOf(url) {
+  try { return new URL(url).hostname; } catch { return 'invalid-url'; }
 }
 
-/** Multiplier as a number (1e18 → 1.0). Zero or unreadable → null, never 0. */
-export function uiMultiplierToNumber(uiMultiplier) {
-  const raw = toBigInt(uiMultiplier);
-  if (raw === null || raw <= 0n) return null;
-  return Number(raw) / Number(UI_MULTIPLIER_SCALE);
-}
+// EIP-1967 storage slots: keccak256('eip1967.proxy.<name>') - 1.
+export const EIP1967 = Object.freeze({
+  implementation: '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc',
+  admin: '0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103',
+  beacon: '0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50',
+});
 
-/** Underlying shares represented by a raw token amount: raw × uiMultiplier ÷ 1e18, in integers. */
-export function underlyingShares(rawAmount, uiMultiplier) {
-  const raw = toBigInt(rawAmount);
-  const mul = toBigInt(uiMultiplier);
-  if (raw === null || mul === null || mul <= 0n) return null;
-  return (raw * mul) / UI_MULTIPLIER_SCALE;
-}
+// Binance-Peg BSC-USD (USDT) on chain 56. 18 decimals on this chain, unlike 6 on Ethereum.
+export const USDT = Object.freeze({ symbol: 'USDT', address: '0x55d398326f99059ff775485246999027b3197955', decimals: 18 });
 
-/** Price of ONE underlying share from the price of a whole token: division, not multiplication. */
-export function sharePriceFromTokenPrice(tokenPriceUsd, uiMultiplier) {
-  const price = Number(tokenPriceUsd);
-  const mul = uiMultiplierToNumber(uiMultiplier);
-  if (!Number.isFinite(price) || mul === null) return null;
-  return mul === 1 ? price : price / mul;
-}
-
-/** Inverse: price of a whole token from the price of one underlying share. */
-export function tokenPriceFromSharePrice(sharePriceUsd, uiMultiplier) {
-  const price = Number(sharePriceUsd);
-  const mul = uiMultiplierToNumber(uiMultiplier);
-  if (!Number.isFinite(price) || mul === null) return null;
-  return mul === 1 ? price : price * mul;
-}
-
-/** Has any corporate action been applied yet? Exactly 1e18 means none. */
-export function hasCorporateAction(uiMultiplier) {
-  const raw = toBigInt(uiMultiplier);
-  return raw !== null && raw !== UI_MULTIPLIER_SCALE;
+/** A storage word holding an address → the address, lowercase; an empty slot → null. */
+export function slotToAddress(word) {
+  if (typeof word !== 'string' || !/^0x[0-9a-f]{1,64}$/i.test(word)) return null;
+  const hex = word.slice(2).padStart(64, '0').toLowerCase();
+  if (/^0+$/.test(hex)) return null;
+  if (!/^0{24}/.test(hex)) return null; // not an address-shaped word
+  return `0x${hex.slice(24)}`;
 }
