@@ -1,16 +1,16 @@
 {
-  "name": "stock-token-verifier",
+  "name": "bsc-stock-token-verifier",
   "version": "0.2.0",
   "description": "Stock Token Verifier, BNB Smart Chain edition: which bStocks, Ondo Stocks and xStocks contracts on chain 56 are genuine, which are look-alikes, measured from chain state, the issuers' lists and the Binance Web3 API. CLI, JSON snapshot, static report. Zero dependencies.",
   "private": true,
   "license": "SEE LICENSE IN NOTICE",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/BonyNode/stock-token-verifier.git"
+    "url": "git+https://github.com/BonyNode/bsc-stock-token-verifier.git"
   },
-  "homepage": "https://github.com/BonyNode/stock-token-verifier",
+  "homepage": "https://github.com/BonyNode/bsc-stock-token-verifier",
   "bugs": {
-    "url": "https://github.com/BonyNode/stock-token-verifier/issues"
+    "url": "https://github.com/BonyNode/bsc-stock-token-verifier/issues"
   },
   "type": "module",
   "engines": {

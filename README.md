@@ -34,7 +34,7 @@ pass them.
 ## How to run
 
 ```sh
-git clone https://github.com/BonyNode/stock-token-verifier && cd stock-token-verifier
+git clone https://github.com/BonyNode/bsc-stock-token-verifier && cd bsc-stock-token-verifier
 
 # one address, no key needed (lists and rules come from data/snapshot.json)
 node bin/stv-verify.mjs 0x02fca66c1d1afb4e2a7884261eb00f63598a7436
