@@ -14,6 +14,7 @@ const fmt = (n, d = 2) => (n === null || n === undefined || !Number.isFinite(Num
 const usd = (n) => (n === null || n === undefined || !Number.isFinite(Number(n)) ? '—' : `$${fmt(n, Number(n) < 10 ? 4 : 2)}`);
 const time = (iso) => (iso ? `${esc(iso.slice(0, 16).replace('T', ' '))} UTC` : '—');
 const LABEL = { bstocks: 'bStocks', ondo: 'Ondo Stocks', xstocks: 'xStocks' };
+const NOT_REP = 'Cost of 5 % or more against the token price of the same run. The route found for a placeholder wallet ran through thin or mispriced pools; an eligible wallet may be quoted differently (RFQ), which this tool cannot test. The raw answer is in the snapshot.';
 const KIND = { bridged: 'bridged copy', test: 'test contract', other_issuer: 'other issuer', unidentified: 'claimant not identified' };
 const BSCSCAN = (a) => `https://bscscan.com/address/${a}`;
 const addrCell = (a) => `<a class="mono" href="${esc(BSCSCAN(a))}" rel="noopener">${esc(a)}</a>`;
@@ -99,7 +100,8 @@ function marketSection(snap) {
     const x = it.quotes.find((y) => y.sizeUsd === size);
     if (!x) return '<td class="num">—</td>';
     if (x.status === 'error') return `<td class="num warn" title="${esc(x.message)}">${esc(x.code ?? 'error')}</td>`;
-    if (x.representative === false) return `<td class="num warn" title="${esc(x.notRepresentativeReason)}">quote not<br>representative</td>`;
+    // The figure itself is not printed, not even in the tooltip: it describes the route, not a price.
+    if (x.representative === false) return `<td class="num warn" title="${esc(NOT_REP)}">quote not<br>representative</td>`;
     const cost = x.vsTokenPricePct;
     const cls = cost === null || cost === undefined ? 'muted' : (Math.abs(cost) >= 1 ? 'bad' : 'ok');
     return `<td class="num" title="${esc(`${(x.dexes || []).join(', ')}; priceImpactPercent as returned: ${x.priceImpactPercent ?? '—'}; ${x.vendorName ?? ''} ${x.executionMode ?? ''}`)}">${usd(x.effectivePriceUsd)}<br><span class="small ${cls}">${cost === null || cost === undefined ? 'no token price' : `${cost >= 0 ? '+' : ''}${fmt(cost, cost >= 100 ? 0 : 2)}% vs token price`}</span></td>`;
