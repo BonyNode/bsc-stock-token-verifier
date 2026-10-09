@@ -17,6 +17,7 @@ import { NOTICES, SCHEMA_ID, validateSnapshot } from './schema.js';
 import { SIZES_USD, WALLET_PLACEHOLDER, pickSample, sampleMarket } from './market.js';
 
 export const VERSION = '0.2.0';
+export const PRICE_CHUNK = 50;
 const now = () => new Date().toISOString();
 const msToIso = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? new Date(n).toISOString() : null; };
 const scrub = (m) => String(m?.message || m || 'unknown error').replace(/\b([a-z][a-z0-9+.-]*):\/\/(?:[^\s/?#]*@)?([^\s/?#)]+)[^\s)]*/gi, '$1://$2').slice(0, 240);
@@ -500,8 +501,10 @@ async function scanPrices({ w3, w3Reason, genuine, sample, src, fetchImpl, say }
   const errors = [];
   const targets = genuine.filter((t) => t.family !== 'xstocks');
   const byAddr = new Map(targets.map((t) => [t.address, t]));
-  for (let i = 0; i < targets.length; i += 100) {
-    const chunk = targets.slice(i, i + 100);
+  // Measured 2026-10-09: 100 addresses in the query (the documented maximum) answer HTTP 414 URI Too
+  // Long; 65 passed. Chunks of 50 stay clear of it.
+  for (let i = 0; i < targets.length; i += PRICE_CHUNK) {
+    const chunk = targets.slice(i, i + PRICE_CHUNK);
     try {
       const rows = readRwaPrice(await w3.request('rwaPrice', { query: { binanceChainId: String(CHAIN_ID), tokenContractAddresses: chunk.map((t) => t.address).join(',') } }));
       const at = now();

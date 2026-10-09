@@ -8,8 +8,9 @@
 //   • an empty pool list does not mean untradable: equity routes are quoted by RFQ market makers,
 //     not by on-chain pools;
 //   • an RFQ refusal (40367 market state, 40369 outside trading time, 40374 liquidity, 40375
-//     minimum order, 40368 pairing) is recorded as data about the market at that moment, with its
-//     code and message: it is not a failure of the run;
+//     minimum order, 40368 pairing) or "no valid quote from any vendor" (40441, measured) is
+//     recorded as data about the market at that moment, with its code and message: it is not a
+//     failure of the run;
 //   • an auth, signature or permission error stops the sampler at once (every further request
 //     would fail the same way).
 // The `userWalletAddress` the API requires for RFQ routes is a neutral placeholder that nobody
@@ -88,7 +89,9 @@ export async function sampleMarket({ w3, targets, sizesUsd = SIZES_USD, wallet =
           message: RFQ_CODES[error.code] ? `${RFQ_CODES[error.code]}: ${String(error.message).slice(0, 160)}` : String(error.message).slice(0, 200),
           toTokenAmount: null, priceImpactPercent: null, dexes: [], isHoneyPot: null, taxRate: null, effectivePriceUsd: null,
         });
-        if (!RFQ_CODES[error.code]) errors.push(`quote ${t.symbol} $${sizeUsd}: ${String(error.message).slice(0, 120)}`);
+        // An answer of the API with a code (RFQ refusal, no route from any vendor) is data about the
+        // market; only a failure to get an answer at all (network, schema) is a failure of the run.
+        if (!(error.code != null && ['rfq', 'api'].includes(error.kind))) errors.push(`quote ${t.symbol} $${sizeUsd}: ${String(error.message).slice(0, 120)}`);
       }
     }
     if (fatal) break;
