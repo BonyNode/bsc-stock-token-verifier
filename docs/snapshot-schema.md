@@ -25,7 +25,13 @@ writes a file: a snapshot that does not match this document is never written.
 - **Labels.** Show `verdict: "look-alike"` as "unlisted contract using the same ticker or name",
   with `claimantKind` as bridged copy / test contract / other issuer / claimant not identified.
 - **Quotes.** Show a quote's figure only when `representative` is `true`. When it is `false`,
-  show "quote not representative" and the reason, never the figure.
+  show "quote not representative" with this fixed sentence, never a figure:
+  "Cost of 5 % or more against the token price of the same run. The route found for a placeholder
+  wallet ran through thin or mispriced pools; an eligible wallet may be quoted differently (RFQ),
+  which this tool cannot test. The raw answer is in the snapshot."
+  `notRepresentativeReason` is diagnostic only: it carries the measured cost, so it must not be
+  displayed. The same goes for `vsTokenPricePct`, `effectivePriceUsd`, `priceImpactPercent` and
+  `toTokenAmount` of such a quote.
 - **Notices.** Show the four `notices` sentences next to the data.
 
 ## Stability
