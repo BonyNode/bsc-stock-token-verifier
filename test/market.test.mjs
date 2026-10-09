@@ -53,3 +53,22 @@ test('the sample takes the same tickers in every family, both xStocks roles, gen
   assert.deepEqual(picked.map((p) => `${p.underlyingTicker}:${p.family}:${p.role}`), ['NVDA:bstocks:token', 'NVDA:xstocks:token', 'NVDA:xstocks:wrapper', 'AAPL:ondo:token']);
   assert.equal(effectivePriceUsd(100, null, 18), null);
 });
+
+test('the quote cost is measured against the token price of the same run, not taken from priceImpactPercent', async () => {
+  const { addQuoteCosts } = await import('../src/scan.js');
+  const addr = `0x${'ab'.repeat(20)}`;
+  const snap = {
+    prices: { items: [{ address: addr, source: 'binance-w3:rwa-price', tokenPrice: '535.0' }] },
+    market: { items: [{ address: addr, quotes: [
+      { status: 'ok', sizeUsd: 20, effectivePriceUsd: 1582985117.18, priceImpactPercent: '0.9996010001' },
+      { status: 'ok', sizeUsd: 100, effectivePriceUsd: 540.35, priceImpactPercent: '0.0100' },
+      { status: 'error', sizeUsd: 1000, code: 40374, effectivePriceUsd: null },
+    ] }, { address: `0x${'cd'.repeat(20)}`, quotes: [{ status: 'ok', sizeUsd: 20, effectivePriceUsd: 230 }] }] },
+  };
+  addQuoteCosts(snap);
+  const [a, b, c] = snap.market.items[0].quotes.map((q) => q.vsTokenPricePct);
+  assert.ok(a > 1e8, 'a 99.96 % impact is a cost of millions of percent, not 0.9996 %');
+  assert.ok(Math.abs(b - 1) < 1e-9);
+  assert.equal(c, null);
+  assert.equal(snap.market.items[1].quotes[0].vsTokenPricePct, null, 'no token price, no figure');
+});

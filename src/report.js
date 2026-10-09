@@ -97,10 +97,12 @@ function marketSection(snap) {
     const x = it.quotes.find((y) => y.sizeUsd === size);
     if (!x) return '<td class="num">—</td>';
     if (x.status === 'error') return `<td class="num warn" title="${esc(x.message)}">${esc(x.code ?? 'error')}</td>`;
-    return `<td class="num" title="${esc((x.dexes || []).join(', '))}">${usd(x.effectivePriceUsd)}<br><span class="small muted">impact ${esc(x.priceImpactPercent ?? '—')}%</span></td>`;
+    const cost = x.vsTokenPricePct;
+    const cls = cost === null || cost === undefined ? 'muted' : (Math.abs(cost) >= 1 ? 'bad' : 'ok');
+    return `<td class="num" title="${esc(`${(x.dexes || []).join(', ')}; priceImpactPercent as returned: ${x.priceImpactPercent ?? '—'}; ${x.vendorName ?? ''} ${x.executionMode ?? ''}`)}">${usd(x.effectivePriceUsd)}<br><span class="small ${cls}">${cost === null || cost === undefined ? 'no token price' : `${cost >= 0 ? '+' : ''}${fmt(cost, cost >= 100 ? 0 : 2)}% vs token price`}</span></td>`;
   };
   const rows = m.items.map((it) => `<tr data-f="${esc([it.address, it.symbol, it.underlyingTicker].join(' ').toLowerCase())}"><td>${esc(it.underlyingTicker)}</td><td>${esc(LABEL[it.family])}${it.role === 'wrapper' ? ' <span class="chip">wrapper</span>' : ''}</td><td>${esc(it.symbol)}</td><td>${it.status ? `${esc(it.status.marketStatus ?? '')}${it.status.reasonCode ? ` <span class="chip">${esc(it.status.reasonCode)}</span>` : ''}` : '—'}</td><td class="num">${it.pools?.status === 'ok' ? `${it.pools.count} · ${usd(it.pools.liquidityUsdTotal)}` : esc(it.pools?.status ?? '—')}</td>${m.sizesUsd.map((s) => q(it, s)).join('')}</tr>`).join('');
-  return `<ul>${sessions}</ul><p class="small muted">${esc(m.method)}. Quotes are ${esc(m.quoteToken.symbol)} → token; an RFQ refusal shows its code (hover for the message). The placeholder wallet sent as userWalletAddress: <span class="mono">${esc(m.walletPlaceholder)}</span>. Empty pools do not mean untradable: equity routes are quoted by RFQ.</p>
+  return `<ul>${sessions}</ul><p class="small muted">${esc(m.method)}. Each cell: USD paid per token received, and how far that is from the Binance token price of the same run (red from 1%). Quotes are ${esc(m.quoteToken.symbol)} → token; a refusal shows its code (hover for the message). The placeholder wallet sent as userWalletAddress: <span class="mono">${esc(m.walletPlaceholder)}</span>. Empty pools do not mean untradable: equity routes are quoted by RFQ.</p>
 ${src(snap, m.sources, m.fetchedAt)}
 <div class="scroll"><table><thead><tr><th>Ticker</th><th>Family</th><th>Symbol</th><th>Session</th><th class="num">Pools · liquidity</th>${m.sizesUsd.map((s) => `<th class="num">$${s}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }

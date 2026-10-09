@@ -196,7 +196,7 @@ MarketItem: `{ address, family, symbol, status, pools, quotes }`
 
 - `status`: `{ source, fetchedAt, openState, marketStatus, reasonCode, nextOpenAt, nextCloseAt }` or `null`
 - `pools`: `{ source, fetchedAt, status, count, liquidityUsdTotal, top: [{ protocolName, poolAddress, liquidityUsd }] }`. An empty pool list does not mean untradable: equity liquidity is quoted by RFQ
-- `quotes`: one per size: `{ sizeUsd, direction: "USDT->token", amountInRaw, fetchedAt, status: "ok" | "error", code, message, vendorName, executionMode, tradeFee, toTokenAmount, priceImpactPercent, dexes, isHoneyPot, taxRate, effectivePriceUsd }` (`effectivePriceUsd` = sizeUsd ÷ tokens received). An RFQ refusal (`40367`, `40369`, `40374`, `40375`, `40368`) is `status: "error"` with its code: data about the market, not a failure of the run
+- `quotes`: one per size: `{ sizeUsd, direction: "USDT->token", amountInRaw, fetchedAt, status: "ok" | "error", code, message, vendorName, executionMode, tradeFee, toTokenAmount, priceImpactPercent, dexes, isHoneyPot, taxRate, effectivePriceUsd }` (`effectivePriceUsd` = sizeUsd ÷ tokens received), plus `vsTokenPricePct`: number or `null`, (effectivePriceUsd ÷ the `binance-w3:rwa-price` token price of the same run − 1) × 100. `priceImpactPercent` is kept exactly as returned; measured on 2026-10-09 it behaves as a fraction (0.9996 came with an effective price 2.9 million times the token price), so it is not converted An RFQ refusal (`40367`, `40369`, `40374`, `40375`, `40368`) is `status: "error"` with its code: data about the market, not a failure of the run
 
 ## Prices
 

@@ -379,9 +379,26 @@ export async function runScan({ rpc, pub, w3 = null, w3Reason = 'no_api_key', ca
       lookalikes: { total: lookalikes.counts.total, lowerBound: lookalikes.lowerBound },
     },
   };
+  addQuoteCosts(snapshot);
   const problems = validateSnapshot(snapshot);
   if (problems.length) throw new Error(`the snapshot does not match ${SCHEMA_ID}: ${problems.slice(0, 5).join('; ')}`);
   return { snapshot, fatal };
+}
+
+/**
+ * What each successful quote costs against the token price of the same run (rwa/price for bStocks
+ * and Ondo): vsTokenPricePct = (effective price ÷ token price − 1) × 100. Computed here because the
+ * quote's own priceImpactPercent was measured to be a fraction, not a percent (an impact of
+ * 0.9996 came with an effective price 2.9 million times the token price), so it is kept as
+ * returned and not used for this figure. Pure: reads and writes the snapshot object only.
+ */
+export function addQuoteCosts(snapshot) {
+  const px = new Map((snapshot.prices?.items || []).filter((p) => p.source === 'binance-w3:rwa-price' && Number(p.tokenPrice) > 0).map((p) => [p.address, Number(p.tokenPrice)]));
+  for (const it of snapshot.market?.items || []) {
+    const ref = px.get(it.address) ?? null;
+    for (const q of it.quotes || []) q.vsTokenPricePct = q.status === 'ok' && q.effectivePriceUsd && ref ? (q.effectivePriceUsd / ref - 1) * 100 : null;
+  }
+  return snapshot;
 }
 
 // ── Look-alike scan ─────────────────────────────────────────────────────────────────────────────
