@@ -29,7 +29,8 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SKIP_DIRS = new Set(['.git', 'node_modules']);
+// .cache holds the scan's working files (gitignored, never published).
+const SKIP_DIRS = new Set(['.git', 'node_modules', '.cache']);
 const j = (...parts) => parts.join('');
 
 export const RULES = [
@@ -52,7 +53,9 @@ export const RULES = [
   { id: 'binance-header-value', secret: true, re: /x-oc-(?:sign|apikey)['"]?\s*[:=]\s*['"]?[A-Za-z0-9+/=_-]{20,}/i,
     hit: [j('X-OC-', 'SIGN: ', 'q83vEjRWeJ'.repeat(3), '=')], miss: ["'X-OC-APIKEY': apiKey,", "'X-OC-SIGN': signRequest({ secretKey })"] },
   // Information only: no call to buy or to invest, anywhere in the repository.
-  { id: 'call-to-buy', re: /\b(?:buy|invest)\s+(?:now|today|here)\b|\bguaranteed\s+(?:returns?|profits?)\b|\bto\s+the\s+moon\b/i,
+  // Our own wording only: data/ and report/ quote third-party contract names verbatim, and a name on
+  // a public chain can say anything.
+  { id: 'call-to-buy', skipFiles: /^(?:data|report)\//, re: /\b(?:buy|invest)\s+(?:now|today|here)\b|\bguaranteed\s+(?:returns?|profits?)\b|\bto\s+the\s+moon\b/i,
     hit: [j('Buy ', 'now before it is gone'), j('guaranteed ', 'returns')], miss: ['Nothing here is an offer or a recommendation to buy or sell anything.'] },
 ];
 
@@ -84,8 +87,9 @@ export function loadExtraRules(file) {
 /** Findings for one file's text. Secret rules never echo what they found. */
 export function scanText(text, file = '<text>', rules = RULES) {
   const out = [];
+  const active = rules.filter((rule) => !(rule.skipFiles && rule.skipFiles.test(file)));
   text.split('\n').forEach((line, index) => {
-    for (const rule of rules) {
+    for (const rule of active) {
       if (!test(rule, line)) continue;
       const m = rule.re ? line.match(rule.re) : null;
       out.push({ file, line: index + 1, rule: rule.id, excerpt: rule.secret ? '[redacted]' : JSON.stringify((m?.[0] ?? line.trim()).slice(0, 60)) });

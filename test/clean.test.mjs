@@ -106,6 +106,10 @@ test('no extra file is not an error; an extra file that cannot be loaded stops t
 test('the issuers\' own words and the disclaimers pass', () => {
   assert.deepEqual(scanText('bStocks are certificates; xStocks are tracker certificates; Moderna (Ondo Tokenized) is an Ondo Stock on BNB Smart Chain.'), []);
   assert.deepEqual(scanText('Information only, not investment advice. Nothing here is an offer or a recommendation to buy or sell anything.'), []);
+  // Contract names in the data are third-party text quoted verbatim; our own files are judged.
+  const name = j('{"name":"To The ', 'Moon"}');
+  assert.deepEqual(scanText(name, 'data/snapshot.json'), []);
+  assert.deepEqual(scanText(name, 'README.md').map((f) => f.rule), ['call-to-buy']);
 });
 
 test('a Binance Web3 key value or a signing header value is caught and never echoed', () => {
