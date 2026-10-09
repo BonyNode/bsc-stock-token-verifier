@@ -1,208 +1,165 @@
-# X PrimeFlow Stock Token Verifier — Powered by Robinhood Chain
+# Stock Token Verifier — BNB Smart Chain edition
 
-An open-source module of X PrimeFlow (https://xprimeflow.trade), built by BonyNode
+**Which bStocks, Ondo Stocks and xStocks contracts on BNB Smart Chain are genuine, and which only
+look like them.** An open-source verifier built on the Binance Web3 API, the issuers' own lists and
+chain state: a command-line check for one address, a full scan that writes a JSON snapshot (the
+primary output, schema in [docs/snapshot-schema.md](docs/snapshot-schema.md)), and a single-file
+static HTML report rendered from it.
 
-This project is not affiliated with, endorsed by, or officially connected with Robinhood Markets, Inc.
-
-Is this contract a real Stock Token? This package answers from chain state alone: a registry of the
-**194 genuine Stock Tokens** on Robinhood Chain (chain id 4663, snapshot of 2026-09-20), the rule that
-separated them from **92 look-alikes**, a command-line verifier, a small library and a read-only HTTP API.
-
-Robinhood publishes the official list of its contracts at
-**https://docs.robinhood.com/chain/contracts**, generated live from the on-chain asset registry.
-That list is the reference. This package is an independent re-check from chain state: it does not
-read the list or the asset registry contract, and reaches its own set from bytecode and creator
-tests — useful when an address reaches you through a wallet, a pool or a message and you want an
-answer that does not depend on a web page. A disagreement between the two is worth reporting.
+Independent open-source tool. Not affiliated with, endorsed by or connected with Binance, Ondo
+Finance or Backed (xStocks). Information only, not investment advice.
 
 - Zero dependencies. Node.js 20 or newer. No install step.
-- `npm test` runs fully offline; live checks against the chain are opt-in.
-- The same rule powers the Robinhood Chain showcase of X PrimeFlow: **https://xprimeflow.trade/robinhood-chain**
+- `npm test` runs fully offline; the scan needs network, and a Binance Web3 API key for its keyed
+  parts. The single-address check needs no key.
+- The issuers' own words are used: bStocks are certificates; xStocks are tracker certificates
+  issued by Backed; Ondo Stocks are issued by Ondo Global Markets.
 
-## Why this exists
+## Why
 
-Anyone can deploy an ERC-20 called "NVIDIA • Robinhood Token" with the symbol `NVDA`. On 2026-09-20
-the chain explorer (https://robinhoodchain.blockscout.com) listed **286** contracts whose names end in
-"Robinhood Token". **194** of them are Stock Tokens by the tests in
-[How the registry was built](#how-the-registry-was-built), run on the same day. **92** are not — among
-them a rival `NVDA`, a rival `GME` and a second `LULU`.
+Anyone can deploy a BEP-20 token called "NVIDIA xStock" with the symbol `NVDAx`. On 2026-10-09 one
+search for `NVDA` on chain 56 returned, besides the issuer's `NVDAx`, twelve more contracts with
+exactly that symbol and that name. Names, symbols and decimals prove nothing. What does: the address
+is on the issuer's own list, and the contract at that address runs the issuer's code behind the
+issuer's proxy.
 
-Nothing in a counterfeit's symbol, name or decimals gives it away, and interface checks are not
-enough either: the counterfeit `LULU` at `0x9b6cc37b76037d3bfb55aebd5f5d210a82e6a85a` implements
-the ERC-8056 `uiMultiplier()` and answers exactly 1.0. Only its bytecode differs.
+## Latest snapshot
 
-The reverse holds as well: a ticker or a working multiplier does not make a contract a counterfeit.
-Tickers are not unique, and ERC-8056 is a public draft ERC anyone may implement — a token "Frog"
-with the symbol `F` is not a fake Ford. Only a contract that calls itself a Stock Token is judged as
-one.
+See [`data/snapshot.json`](data/snapshot.json) (schema `stv-bsc-snapshot/1`) and the report
+[`report/index.html`](report/index.html). The counts, the time of measurement and the source of each
+number are in the snapshot itself (`summary`, `sources`, `families.*.fingerprint`).
 
-## How a contract is checked
+## How a contract is judged
 
-At check time the verifier reads, in one JSON-RPC batch at the latest block:
+A contract is **genuine** when all of these hold:
 
-| Fact | Call | Why |
-|---|---|---|
-| chain id | `eth_chainId` | must be `0x1237` (4663); an endpoint of another chain would describe another chain |
-| bytecode hash | `keccak256(eth_getCode)` | Stock Tokens are beacon proxies with the beacon address embedded in their runtime code, so all 194 share one hash: `0x6c1fdd40…acd65630` |
-| multiplier | `uiMultiplier()` | the live corporate-action multiplier (the call reverts on many counterfeits) |
-| symbol, name | `symbol()`, `name()` | what the contract claims to be |
+1. **Issuer list** — the address is in the family's list: the xStocks public API
+   (`api.xstocks.fi`, BinanceSmartChain deployments: the token and its ERC-4626 v2 wrapper), the
+   Ondo token CSV linked from `docs.ondo.finance/addresses`, or — bStocks have no separate issuer
+   registry — Binance's own bStocks list.
+2. **Code hash** — `keccak256(eth_getCode)` equals the code hash shared by the issuer-listed
+   contracts of that family and role.
+3. **Proxy slot** — the EIP-1967 `beacon` (beacon proxies: bStocks, Ondo) or `admin` (transparent
+   proxies: xStocks token and wrapper) slot equals the one they share. Proxy bytecode is generic —
+   anyone can deploy the same bytes — the slot names the issuer's beacon or admin.
+4. **Creator** — where checked, the contract creator reported by the Binance Web3 API
+   (`token/basic-info`) is one of the addresses that created contracts fitting the rule.
 
-and then looks the address up in the registry snapshot. The verdict:
+The rules are not typed in: the scan **derives** them from the issuer-listed contracts on chain (the
+dominant code hash per family and role, then the beacon/admin shared by more than half of them). A
+listed contract that does not fit is reported as **unknown** with its reason, never forced to either
+side. The implementation slot is reported, not required: an issuer may upgrade tokens one by one.
+
+A **look-alike** is on no list and claims a family on chain: its own `name()` carries the family
+marker (`xStock`, `(Ondo Tokenized)`), or its `symbol()` is exactly the symbol of a genuine contract
+(case included) and its name backs it (repeats the symbol, or shares a distinctive word with the
+genuine contract's name). A shared ticker alone (`NVDA`) is not a claim. The look-alike count is a
+lower bound: each search returns at most one page of 50.
 
 | Verdict | Meaning | CLI exit code |
 |---|---|---|
-| `authentic` | listed in the registry **and** the live bytecode matches the reference hash | 0 |
-| `counterfeit` | the contract calls itself a Stock Token — its own `name()` ends in "Robinhood Token" — but has neither the reference bytecode nor a place in the registry; or a registry address whose live bytecode differs from the reference. The address of the genuine token with the same ticker is given when there is one | 1 |
-| `unlisted` | reference bytecode, but not in the snapshot. Identical runtime bytes can be deployed by anyone, so this is not "authentic"; the issuer also adds Stock Tokens over time, so it is not "counterfeit" either | 2 |
-| `none` | the contract does not call itself a Stock Token. A ticker shared with a listed Stock Token or a working ERC-8056 multiplier alone is not a claim: the shared ticker is reported as `sharesTickerWith`, the multiplier as `multiplierAnswered` | 3 |
-| `unreadable` | the bytecode could not be read, so nothing was checked — a dead RPC never produces a clean verdict. A registry address that answers no bytecode at all (a node behind the deployment block, or pruned) is `unreadable` too, with the reason `code_empty` — never `counterfeit` | 4 |
+| `genuine` | on the issuer list, code hash and proxy slot fit the family rule (creator, when checked, too) | 0 |
+| `look-alike` | on no list, copies the family's name marker or a genuine symbol | 1 |
+| `unknown` | in between: listed but outside the rule, or the rule fits but no list has it — with the reason | 2 |
+| `none` | single check only: no family claim | 3 |
+| — | nothing could be read (RPC down): `unknown` with `code_unreadable` | 4 |
 
-The CLI exits 64 on a usage error and 70 on an internal error; exit code 1 means `counterfeit` and
-nothing else.
-
-With `--deployer` (API: `?deployer=1`) the contract creator is also read from the chain explorer
-and reported next to the verdict. It never changes the verdict: for a listed address the creator is
-already part of the snapshot, and for an unlisted one it is the second test a registry rebuild applies.
-
-### How the registry was built
-
-The candidates are the tokens whose names end in "Robinhood Token" in the token list of the chain
-explorer, https://robinhoodchain.blockscout.com — 286 on 2026-09-20. Every count below was measured on
-that day: tests 1 and 2 over the public JSON-RPC of Robinhood Chain at the latest block, test 3
-through the explorer API (Blockscout v2). Each candidate went through:
-
-1. **Interface:** `decimals()` is 18 and `uiMultiplier()` answers — 202 of 286 passed. On WETH and
-   USDG of the same chain the multiplier call reverts, so the test does discriminate.
-2. **Bytecode:** `keccak256(eth_getCode)` equals the reference hash — 194 of the 202 passed.
-3. **Creator (independent cross-check):** the creator of each of the 202, looked up in the chain
-   explorer. All 194 share one creator (`0x4783c67b63de2b358ac5951a7d41f47a38f3c046`); the 8
-   rejected have five other creators among them.
-
-Tests 2 and 3 split the 202 identically, with zero disagreement. The 194 carry 194 distinct symbols.
-
-### What you can reproduce, and how
-
-- **The bytecode test — anyone, over any RPC, at the latest block, any time after the snapshot.**
-  `npm run recheck` re-reads the bytecode of all 194 addresses and compares the hashes
-  (26 paced requests). On 2026-09-27 it reported 194 of 194 matching.
-- **The creator test — through the explorer.** This package reads contract creators from the
-  explorer API (Blockscout v2). `node scripts/rebuild-registry.mjs --rebuild` repeats the whole
-  selection against it and prints the split, any disagreement between tests 2 and 3, and the
-  difference from the shipped snapshot; `--out <file>` writes a new snapshot. Some networks receive
-  a browser challenge instead of JSON from the explorer; the script then stops and says so.
-- **The whole set — against the issuer's list.** The official list at
-  https://docs.robinhood.com/chain/contracts is generated from the on-chain asset registry; compare
-  the snapshot with it after any rebuild.
+Usage errors exit 64, internal errors 70.
 
 ## Quick start
 
 ```sh
 git clone https://github.com/BonyNode/stock-token-verifier && cd stock-token-verifier
-node bin/stv-verify.mjs 0x1076f47f9632d726cf0ff93ad1616c45cbb8b94d
+
+# one address, no key needed (lists and rules come from data/snapshot.json)
+node bin/stv-verify.mjs 0x02fca66c1d1afb4e2a7884261eb00f63598a7436
+node bin/stv-verify.mjs 0xefe1798ac4d4e0ac5a6f145ea01956bae8103777 --json
+
+# the full scan: snapshot + report (Binance Web3 API key optional; without it the keyed parts are skipped)
+BINANCE_W3_ENV_FILE=/path/to/binance-web3.env node bin/stv-verify.mjs scan
+node bin/stv-verify.mjs scan --no-key --no-market        # keyless mode
+
+# re-render the report from a snapshot
+node bin/stv-verify.mjs report --snapshot data/snapshot.json --out report/index.html
 ```
 
-```
-0x1076f47f9632d726cf0ff93ad1616c45cbb8b94d on Robinhood Chain (4663), block 73590409
-Verdict: COUNTERFEIT — claims to be NVDA (NVIDIA • Robinhood Token), but is not a Robinhood Stock Token
-  name            NVIDIA • Robinhood Token
-  bytecode hash   0xb3e93523522c7151dcb0c2ad7022221cb56e7dbc8c7a304c0cc71d8e948f09e8 differs from the reference 0x6c1fdd40002dcb440c7fff6a84171404d279ccb057803b65826f7546acd65630
-  registry        not listed
-  uiMultiplier    no answer (the call reverts)
-  creator         not checked (pass --deployer; needs access to the chain explorer)
-  genuine token   the real NVDA lives at 0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec
-```
+The key file holds two lines, `BINANCE_W3_API_KEY=` and `BINANCE_W3_SECRET_KEY=`; the variables can
+also be set directly. The key is read only inside the client and never printed, logged or written to
+the snapshot. `--rpc <url>[,<url>…]` or `STV_RPC_URLS` choose the JSON-RPC endpoints.
 
-Options: `--json` prints the full result; `--deployer` adds the explorer lookup (`--explorer <url>`
-for another Blockscout instance); `--rpc <url>[,<url>…]` chooses the endpoints; `--help` lists the
-options and exit codes. Without `--rpc`, the endpoints in `STV_RPC_URLS` (comma-separated) are tried
-first and two third-party public endpoints after them. The official Robinhood Chain Public RPC
-(`https://rpc.mainnet.chain.robinhood.com`) is not a default: the Robinhood Chain Terms of Service
-(§2.4) state that "you will use the Services solely for lawful testing, experimentation, evaluation,
-and development purposes". Add it through `STV_RPC_URLS` only for such use, and bring your own
-provider for anything else.
+## Binance Web3 API integration
 
-## Library
+Base `https://web3.binance.com/build`; every request is signed:
+`X-OC-SIGN = Base64(HMAC-SHA256(timestamp + METHOD + requestPath + body))` with the `/build` prefix
+and the exact query string in `requestPath`, `X-OC-TIMESTAMP` in ISO 8601 with milliseconds.
 
-```js
-import { verifyAddress, stockTokenVerdict, stockTokenByAddress, sharePriceFromTokenPrice } from './src/index.js';
-
-const result = await verifyAddress('0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec');
-result.verdict;       // 'authentic'
-result.multiplierRaw; // '1000775159164630595' at the time of writing, i.e. 1.000775…
-```
-
-`stockTokenVerdict()` is pure: pass facts you read yourself (bytecode hash, multiplier, symbol,
-name) and it returns the verdict with exactly the facts it was derived from.
-
-## Read-only API
-
-```sh
-npm run serve        # PORT=8787 HOST=127.0.0.1 by default
-```
-
-| Route | Returns |
+| Endpoint | Used for |
 |---|---|
-| `GET /api/public/robinhood-chain` | module catalogue |
-| `GET /api/public/robinhood-chain/stock-tokens` | the 194 Stock Tokens with their live multipliers and the authenticity rule. The live showcase serves the same path; its answer carries extra freshness fields |
-| `GET /api/public/robinhood-chain/verify/:address` | the verdict for one contract; `?deployer=1` adds the creator lookup |
+| `GET /api/v1/dex/market/rwa/platforms` | how many bStocks and Ondo tokens Binance counts on chain 56 |
+| `GET /api/v1/dex/market/rwa/tokens` (`platformId` bstock, ondo) | the Binance RWA lists, market status per token, `tokenToShareRatio` |
+| `GET /api/v1/dex/market/rwa/price` | on-chain token price and Binance reference price (batches of 100) |
+| `POST /api/v1/dex/market/token/basic-info` | contract creator, one address per request |
+| `GET /api/v1/dex/market/token/search` | look-alike search, one query per underlying ticker |
+| `GET /api/v1/dex/market/token/top-liquidity` | deepest pools of sampled genuine contracts |
+| `GET /api/v1/dex/aggregator/quote` | USDT → token quotes at $20 / $100 / $1,000; RFQ refusals recorded as data |
 
-Every successful answer is an envelope `{ ok, source, chain, section, asOf, partial, failed, data, ts }`.
-A failing upstream answers **HTTP 503 with the reason**, never HTTP 200 with an invented empty set;
-unread multipliers make the answer `partial` and are named in `failed`. No key, CORS open, GET/HEAD
-only, 60 requests per minute per IP (30 on the two heavy routes; behind your own reverse proxy,
-`TRUST_PROXY=1` takes the client from the rightmost `X-Forwarded-For` entry). Results are cached
-for five minutes; the registry is read in batches of 8 calls with a pause between batches, below
-the public node's limits, and nothing in this package uses `eth_getLogs`.
+Pace: at least 250 ms between requests to one endpoint and 60 ms between any two (limits: 5 per
+second per endpoint, 1 200 per minute). HTTP 429 is retried after `Retry-After`. 40101/40102/40104
+stop the keyed part at once and say why; an RFQ refusal (40367, 40368, 40369, 40374, 40375) is a
+fact about the market at that moment. An answer without the fields the code relies on is a schema
+error, never an empty success. Keyless Binance endpoints documented in Binance's skills repository
+(`github.com/binance/binance-skills-hub`) are used as a cross-check and for the keyless mode, always
+under their own source ids.
 
-The verify answer does not name the upstream RPC endpoint, and URLs in error reasons are cut to
-their scheme and host — in the API, the CLI and the library alike: a provider URL can carry a key or
-a login and password. The CLI and the library keep the full URL of the endpoint that answered in `rpc`.
+`referencePrice`: Binance documents it as a per-share figure converted from the on-chain token price,
+not an official quote. Measured on 2026-10-09 over 488 rows, `tokenPrice ÷ referencePrice` equals
+`tokenToShareRatio` in every row: it is shown next to the token price, never as the price of the share.
 
-Responses captured from the public chain on 2026-09-27 are in [`examples/`](examples/), with their
-captured values, reshaped by hand to the current response format (`stock-tokens.json` has its
-`tokens` array cut to five rows).
+Frictions met while building it — exact requests, codes and times — are logged in
+[docs/devex-observations.md](docs/devex-observations.md).
 
-## Share price and the multiplier
+## Before and after
 
-Stock Tokens never rebase. Dividends and splits are expressed by the ERC-8056 multiplier
-`uiMultiplier()` (18 decimals, `1e18` = 1.0). Two prices must not be confused:
+This repository started on 2026-09-27 (commit `cda3767`) as the Robinhood Chain edition: one chain
+(4663), one issuer, a registry of 194 Stock Tokens selected by one bytecode hash and one creator, a
+CLI, a small library and a read-only HTTP API.
 
-- the **token price** — what an oracle or an on-chain swap reports; the multiplier is already inside it;
-- the **share price** — what one underlying share costs: `token price ÷ uiMultiplier`.
+The BNB Smart Chain edition (from 2026-10-09):
 
-Dividing is correct; multiplying would count the dividend twice. At today's multipliers
-(1.0 to 1.0051) both mistakes look like slippage, which is why the direction is pinned by tests.
+- **Kept:** the zero-dependency design, Keccak-256, the batched JSON-RPC client with failover and
+  `assertChainId` (now `0x38`), the rule "a symbol proves nothing, the address and the code do", the
+  honest-failure discipline (a dead source is never an empty success), the pre-publication check.
+- **Replaced:** one hard-coded hash and creator → rules derived per issuer family and role from the
+  issuers' own lists; a fixed registry file → a scan that rebuilds the lists every run; the verdict
+  set → `genuine / look-alike / unknown / none` with machine-readable reasons.
+- **New:** the Binance Web3 API client (signing, pacing, 429 handling, explicit errors), the
+  xStocks and Ondo list readers, the look-alike scan, the market sample (pools and aggregator
+  quotes), the token-price vs reference-price comparison, the snapshot schema and validator, the
+  static HTML report, a resumable on-chain fact cache.
+- **Dropped:** the HTTP API server and the ERC-8056 multiplier helpers of the Robinhood Chain
+  edition, and its chain-specific naming rules.
 
 ## Limitations
 
-- The registry is a snapshot of 2026-09-20. New Stock Tokens show as `unlisted` until the registry
-  is rebuilt.
-- The creator test needs the explorer, which may challenge automated clients on some networks.
-- Multipliers are live values at the latest block; no history is collected.
-- A verdict is about the identity of a contract, nothing more. It says nothing about price,
-  liquidity or the backing of the asset, and it is not financial advice. No warranty.
-- Nothing is read from the issuer's off-chain services, including its official list: every fact
-  comes from chain state (and, optionally, the explorer).
+- Lists are what the issuers and Binance publish at scan time; a token added later shows as
+  `unknown` (fingerprint without listing) until the next scan.
+- The xStocks API lists the same addresses for every EVM network; the scan checks each on chain 56.
+- Creators are read for every bStocks and Ondo contract and for the xStocks contracts Binance lists
+  (and their pairs) — `basic-info` takes one address per request. Other xStocks contracts carry
+  `creator_not_checked`.
+- Look-alike counts are lower bounds (one page of 50 per search, only the queries in the method).
+- Quotes are a sample, taken once, at the time shown; RFQ availability depends on market hours.
+- A verdict is about the identity of a contract only: nothing about price, liquidity, backing or
+  redemption. No warranty.
 
-## Data, terms and names
+## Data sources
 
-The snapshot and the example responses are public chain state, published so that anyone can check
-the verdicts — for verification and display, not for resale; the `/stock-tokens` answer carries
-`resaleOk: false`. See [DATA.md](DATA.md) for the origin of the data, the terms that apply to it and
-how this project names things.
-
-This project is not affiliated with, endorsed by, or officially connected with Robinhood Markets, Inc.
+BNB Smart Chain public JSON-RPC (`eth_getCode`, `eth_getStorageAt`, `eth_call`); the Binance Web3
+API; Binance's keyless wallet endpoints; `api.xstocks.fi`; the Ondo token CSV. Every source, its
+endpoint, request count, status and read time is listed in the snapshot's `sources`. See
+[DATA.md](DATA.md) for the terms that apply to the data in this repository.
 
 ## License
 
-Everything in this repository is licensed under the [Apache License, Version 2.0](LICENSE), except
-the data listed in [DATA.md](DATA.md); see also [NOTICE](NOTICE). Copyright 2026 The BonyNode Authors.
-
-The data — `data/`, `examples/`, `test/fixtures/` and the reference values in `src/registry.js` —
-is published for verification and display under the terms in [DATA.md](DATA.md) and may be
-redistributed unmodified together with the code for those purposes; the Apache License does not
-extend to it.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). Before a pull request: `npm test` and `npm run check`.
+Code: [Apache License, Version 2.0](LICENSE). Data: see [DATA.md](DATA.md) and [NOTICE](NOTICE).
+Copyright 2026 The BonyNode Authors.

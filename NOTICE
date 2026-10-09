@@ -1,12 +1,13 @@
-X PrimeFlow Stock Token Verifier — Powered by Robinhood Chain
+Stock Token Verifier — BNB Smart Chain edition (an open-source module of X PrimeFlow, by BonyNode)
 Copyright 2026 The BonyNode Authors
 
-This project is not affiliated with, endorsed by, or officially connected with Robinhood Markets, Inc.
-Third-party names and marks belong to their owners and are not licensed by this repository.
+This project is not affiliated with, endorsed by, or officially connected with Binance, Ondo Finance
+or Backed (xStocks). Third-party names and marks belong to their owners and are used only to identify
+the contracts and services this software reads. Information only, not investment advice.
 
 Everything in this repository is licensed under the Apache License, Version 2.0 (see LICENSE),
-except the data listed in DATA.md: data/, examples/, test/fixtures/ and the reference values in
-src/registry.js (the reference bytecode hash and the creator address). That data is public chain
-state, published for verification and display, not for resale. It may be redistributed unmodified
-together with the code of this repository for verification and display. No rights are claimed in
-the chain state itself. The terms that apply to the data are in DATA.md.
+except the data listed in DATA.md: data/, report/ and test/fixtures/. That data is public chain
+state and public lists, read at the times recorded in it and published for verification and
+display, not for resale. It may be redistributed unmodified together with the code of this
+repository for verification and display. No rights are claimed in the chain state or the
+third-party lists themselves. The terms that apply to the data are in DATA.md.
