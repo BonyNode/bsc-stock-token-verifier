@@ -2,48 +2,66 @@
 // SPDX-FileCopyrightText: 2026 The BonyNode Authors
 // SPDX-License-Identifier: Apache-2.0
 //
-// Check whether an address on Robinhood Chain is a genuine Stock Token.
+// Stock-linked tokens on BNB Smart Chain (bStocks, Ondo Stocks, xStocks): is this contract genuine?
 //
-//   node bin/stv-verify.mjs <address> [--json] [--deployer] [--explorer <url>] [--rpc <url>[,<url>…]]
+//   stv-verify <address> [--json] [--rpc <url>[,<url>…]] [--snapshot <file>]
+//   stv-verify scan [--out <file>] [--html <file> | --no-html] [--lookalikes binance|all|none]
+//                   [--no-market] [--no-key] [--cache <file> | --fresh] [--rpc <url>[,…]]
+//   stv-verify report [--snapshot <file>] [--out <file>]
 //
-// Exit code 1 means "counterfeit" and nothing else, so scripts can rely on it: a usage error exits
-// 64, and any other failure of this program exits 70 — never 1.
+// Exit codes of the single check: 0 genuine · 1 look-alike · 2 unknown · 3 none · 4 nothing could
+// be read · 64 usage error · 70 internal error. Exit code 1 means "look-alike" and nothing else.
 
-const EXIT = { authentic: 0, counterfeit: 1, unlisted: 2, none: 3, unreadable: 4 };
+const EXIT = { genuine: 0, 'look-alike': 1, unknown: 2, none: 3 };
+const EXIT_UNREAD = 4;
 const EXIT_USAGE = 64;
 const EXIT_INTERNAL = 70;
 
-const USAGE = 'usage: stv-verify <address> [--json] [--deployer] [--explorer <url>] [--rpc <url>[,<url>...]]';
+const USAGE = `usage: stv-verify <address> [--json] [--rpc <url>[,<url>...]] [--snapshot <file>]
+       stv-verify scan [--out <file>] [--html <file> | --no-html] [--lookalikes binance|all|none]
+                       [--no-market] [--no-key] [--cache <file> | --fresh] [--rpc <url>[,<url>...]]
+       stv-verify report [--snapshot <file>] [--out <file>]`;
+
 const HELP = `${USAGE}
 
-Checks whether <address> on Robinhood Chain (chain id 4663) is a genuine Stock Token, from chain
-state read in one JSON-RPC batch at the latest block.
+Checks stock-linked tokens on BNB Smart Chain (chain id 56): bStocks, Ondo Stocks and xStocks.
+A contract is genuine when the family's issuer list has its address AND its runtime code hash and
+its EIP-1967 beacon/admin slot match the rule measured on all issuer-listed contracts.
 
-options:
-  --json              print the full result as JSON
-  --deployer          also look up the contract creator in the chain explorer (reported, never
-                      changes the verdict)
-  --explorer <url>    Blockscout v2 instance for --deployer (default: the public explorer of the chain)
-  --rpc <url>[,...]   JSON-RPC endpoints to use, in order of preference (default: STV_RPC_URLS,
-                      then the built-in public endpoints)
-  -h, --help          show this help
+single check (no key needed):
+  <address>            live verdict for one contract, from chain state and the snapshot lists
+  --json               print the full result as JSON
+  --snapshot <file>    lists and rules to use (default: data/snapshot.json)
+
+scan (writes the JSON snapshot, the primary output, and the HTML report):
+  --out <file>         snapshot path (default: data/snapshot.json)
+  --html <file>        report path (default: report/index.html); --no-html to skip
+  --lookalikes <scope> searches: binance (tickers Binance lists, default), all (every ticker), none
+  --no-market          skip the market sample (pools and aggregator quotes)
+  --no-key             run without the Binance Web3 API key even if one is configured
+  --cache <file>       on-chain fact cache (default: .cache/onchain.jsonl); --fresh ignores it
+
+report:
+  --snapshot <file>    snapshot to render (default: data/snapshot.json)
+  --out <file>         report path (default: report/index.html)
+
+common:
+  --rpc <url>[,...]    JSON-RPC endpoints (default: STV_RPC_URLS, then built-in public endpoints)
+  -h, --help           show this help
 
 environment:
-  STV_RPC_URLS        comma-separated JSON-RPC endpoints tried before the built-in public ones
+  BINANCE_W3_ENV_FILE  file with BINANCE_W3_API_KEY= and BINANCE_W3_SECRET_KEY= lines (read only
+                       by the scan, never printed); or set the two variables directly
+  STV_RPC_URLS         comma-separated JSON-RPC endpoints tried before the built-in ones
 
-exit codes:
-  0   authentic     listed in the registry and the live bytecode matches the reference
-  1   counterfeit   calls itself a Stock Token but is not one
-  2   unlisted      reference bytecode, but not in the registry snapshot
-  3   none          does not call itself a Stock Token
-  4   unreadable    the bytecode could not be read; nothing was checked
-  64  usage error
-  70  internal error; nothing was concluded`;
+exit codes of the single check:
+  0 genuine · 1 look-alike · 2 unknown · 3 none (no family claim) · 4 nothing could be read
+  64 usage error · 70 internal error; nothing was concluded`;
 
 class UsageError extends Error {}
 
-const FLAGS = new Set(['--json', '--deployer', '--help', '-h']);
-const OPTIONS = new Set(['--rpc', '--explorer']);
+const FLAGS = new Set(['--json', '--help', '-h', '--no-html', '--no-market', '--no-key', '--fresh']);
+const OPTIONS = new Set(['--rpc', '--snapshot', '--out', '--html', '--lookalikes', '--cache']);
 
 function parseArgs(argv) {
   const flags = new Set();
@@ -56,68 +74,111 @@ function parseArgs(argv) {
       if (value === undefined || value === '' || value.startsWith('-')) throw new UsageError(`${arg} needs a value`);
       options[arg] = value;
       i += 1;
-    } else if (FLAGS.has(arg)) {
-      flags.add(arg === '-h' ? '--help' : arg);
-    } else if (arg.startsWith('-')) {
-      throw new UsageError(`unknown option ${arg}`);
-    } else {
-      positional.push(arg);
-    }
+    } else if (FLAGS.has(arg)) flags.add(arg === '-h' ? '--help' : arg);
+    else if (arg.startsWith('-')) throw new UsageError(`unknown option ${arg}`);
+    else positional.push(arg);
   }
   return { flags, options, positional };
 }
 
-// The multiplier printed exactly from its raw 18-decimal integer, not through a float.
-const exact = (raw) => { const s = String(raw).padStart(19, '0'); return `${s.slice(0, -18)}.${s.slice(-18)}`.replace(/\.?0+$/, ''); };
+const say = (line) => process.stderr.write(`${line}\n`);
 
-async function main(argv) {
-  const { flags, options, positional } = parseArgs(argv);
-  if (flags.has('--help')) { console.log(HELP); return 0; }
+async function gitCommit() {
+  const { execFileSync } = await import('node:child_process');
+  try { return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: new URL('..', import.meta.url), stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() || null; } catch { return null; }
+}
 
-  // Loaded inside the error boundary: a broken checkout must exit 70, not 1.
-  const [{ EXPLORER, rpcUrlsFromEnv }, { AUTHENTICITY, SNAPSHOT_DATE }, { createRpc }, { isAddress, verifyAddress }] = await Promise.all([
-    import('../src/chain.js'), import('../src/registry.js'), import('../src/rpc.js'), import('../src/verify.js'),
-  ]);
-
-  if (positional.length !== 1) throw new UsageError(positional.length ? 'exactly one address, please' : 'an address is required');
+async function runVerify({ flags, options, positional }, mods) {
   const [address] = positional;
-  if (!isAddress(address)) throw new UsageError(`not an EVM address: ${address.slice(0, 60)}`);
-  const urls = options['--rpc'] ? options['--rpc'].split(',').map((s) => s.trim()).filter(Boolean) : rpcUrlsFromEnv();
-  if (!urls.length) throw new UsageError('--rpc lists no endpoint');
-
-  const result = await verifyAddress(address, {
-    rpc: createRpc({ urls }), withDeployer: flags.has('--deployer'), explorer: options['--explorer'] || EXPLORER,
-  });
-
-  if (flags.has('--json')) {
-    console.log(JSON.stringify(result, null, 2));
-    return EXIT[result.verdict] ?? EXIT_INTERNAL;
-  }
-
-  const line = (label, value) => console.log(`  ${label.padEnd(15)} ${value}`);
-  // What the contract says about itself: its own symbol and name, never the registry's company name.
+  if (!mods.onchain.isAddress(address)) throw new UsageError(`not an EVM address: ${address.slice(0, 60)}`);
+  const snapshot = mods.snapshot.readSnapshot(options['--snapshot'] || mods.snapshot.DEFAULT_SNAPSHOT);
+  const result = await mods.verify.verifyAddress(address, { rpc: mods.rpc.createRpc({ urls: mods.urls }), snapshot });
+  const code = result.reason === 'rpc_unavailable' ? EXIT_UNREAD : (EXIT[result.verdict] ?? EXIT_INTERNAL);
+  if (flags.has('--json')) { console.log(JSON.stringify(result, null, 2)); return code; }
+  const label = { bstocks: 'bStocks', ondo: 'Ondo Stocks', xstocks: 'xStocks' };
   const own = [result.symbol, result.name && `(${result.name})`].filter(Boolean).join(' ') || 'no symbol and no name';
   const headline = {
-    authentic: `AUTHENTIC Stock Token — ${result.symbol} (${result.underlying})`,
-    counterfeit: `COUNTERFEIT — claims to be ${own}, but is not a Robinhood Stock Token`,
-    unlisted: `UNLISTED — reference bytecode, but not in the ${SNAPSHOT_DATE} registry`,
-    none: 'NOT A STOCK TOKEN — the contract does not call itself a Stock Token',
-    unreadable: `UNREADABLE — nothing was checked (${result.error || result.reason || 'no bytecode'})`,
+    genuine: `GENUINE ${label[result.family]} ${result.role === 'wrapper' ? 'ERC-4626 wrapper' : 'contract'} — ${own}`,
+    'look-alike': `LOOK-ALIKE — claims to be ${own}, a ${label[result.family]} symbol/name, but is not the issuer's contract`,
+    unknown: result.reason === 'rpc_unavailable' ? `UNKNOWN — nothing could be read (${result.error})` : `UNKNOWN — ${result.explanation}`,
+    none: `NONE — ${own} makes no bStocks, Ondo or xStocks claim`,
   }[result.verdict];
-  console.log(`${result.address} on Robinhood Chain (${result.chainId})${result.block ? `, block ${result.block}` : ''}`);
+  const line = (k, v) => console.log(`  ${k.padEnd(15)} ${v}`);
+  console.log(`${result.address} on BNB Smart Chain (56)${result.block ? `, block ${result.block}` : ''}`);
   console.log(`Verdict: ${headline}`);
-  if (result.verdict !== 'unreadable') {
-    line('name', result.name ?? 'no answer');
-    line('bytecode hash', `${result.codeHash} ${result.codeMatch ? 'matches the reference' : `differs from the reference ${result.expectedCodeHash}`}`);
-    line('registry', result.listed ? `listed (snapshot ${SNAPSHOT_DATE}, ${AUTHENTICITY.genuine} genuine)` : 'not listed');
-    line('uiMultiplier', result.multiplierRaw === null ? 'no answer (the call reverts)' : `${exact(result.multiplierRaw)}${result.multiplierRaw === '1000000000000000000' ? ' (no corporate action yet)' : ' (corporate action applied)'}`);
-    if (result.deployerChecked) line('creator', `${result.deployer} ${result.deployerMatch ? 'is the Stock Token deployer' : 'is NOT the Stock Token deployer'}`);
-    else if (result.deployerError) line('creator', `not checked: ${result.deployerError}`);
-    else line('creator', 'not checked (pass --deployer; needs access to the chain explorer)');
-    if (result.genuineAddress) line('genuine token', `the real ${result.sharesTickerWith[0]?.symbol ?? result.symbol} lives at ${result.genuineAddress}`);
-    else for (const twin of result.sharesTickerWith) line('shared ticker', `${twin.symbol} is also the ticker of the Stock Token at ${twin.address} (${twin.underlying}); a shared ticker is not a claim`);
+  if (result.reason !== 'rpc_unavailable') {
+    line('reasons', result.reasons.join(', '));
+    line('code', result.codeSize === 0 ? 'no contract code' : `${result.codeSize} bytes, keccak256 ${result.codeHash}`);
+    if (result.expected?.codeHash) line('family rule', `${result.expected.codeHash} + ${result.expected.slot} ${result.expected.slotValue}`);
+    if (result.beacon) line('beacon', result.beacon);
+    if (result.admin) line('admin', result.admin);
+    if (result.implementation) line('implementation', result.implementation);
+    line('lists', result.listedBy.length ? result.listedBy.join(', ') : 'on no list');
+    if (result.genuineAddress) line('genuine', `the issuer's ${result.claim.genuineSymbol} lives at ${result.genuineAddress}`);
+    if (result.sharedTicker) line('shared ticker', `${result.sharedTicker.ticker} is also the underlying of ${result.sharedTicker.symbol} at ${result.sharedTicker.address}; a shared ticker is not a claim`);
   }
-  return EXIT[result.verdict] ?? EXIT_INTERNAL;
+  console.log(`  ${'snapshot'.padEnd(15)} ${result.snapshotGeneratedAt}`);
+  console.log('  Information only, not investment advice. Not affiliated with Binance, Ondo or Backed.');
+  return code;
+}
+
+async function runScanCommand({ flags, options }, mods) {
+  const { loadCredentials, createBinanceWeb3 } = mods.w3;
+  let w3 = null;
+  let w3Reason = 'disabled';
+  if (!flags.has('--no-key')) {
+    const credentials = loadCredentials();
+    if (credentials.ok) w3 = createBinanceWeb3({ credentials });
+    else w3Reason = credentials.reason;
+  }
+  say(`scan: Binance Web3 API ${w3 ? 'key present' : `not used (${w3Reason})`}`);
+  const cacheFile = flags.has('--fresh') ? null : (options['--cache'] || new URL('../.cache/onchain.jsonl', import.meta.url).pathname);
+  const scope = options['--lookalikes'] || 'binance';
+  if (!['binance', 'all', 'none'].includes(scope)) throw new UsageError('--lookalikes takes binance, all or none');
+  const { snapshot, fatal } = await mods.scan.runScan({
+    rpc: mods.rpc.createRpc({ urls: mods.urls }), pub: mods.pub.createBinancePublic(), w3, w3Reason,
+    cacheFile, lookalikeScope: scope, market: !flags.has('--no-market'), say, gitCommit: await gitCommit(),
+  });
+  const out = mods.snapshot.writeSnapshot(options['--out'] || mods.snapshot.DEFAULT_SNAPSHOT, snapshot);
+  say(`snapshot written: ${out}`);
+  if (!flags.has('--no-html')) {
+    const html = options['--html'] || new URL('../report/index.html', import.meta.url).pathname;
+    mods.report.writeReport(html, snapshot);
+    say(`report written: ${html}`);
+  }
+  for (const [family, c] of Object.entries(snapshot.summary.families)) {
+    say(`  ${family.padEnd(8)} listed ${c.listed}, genuine ${c.genuine}, unknown ${c.unknown}, no code ${c.noCode}, look-alikes ${c.lookalikes}${snapshot.summary.lookalikes.lowerBound ? ' (lower bound)' : ''}`);
+  }
+  if (fatal) say(`Binance Web3 API stopped the keyed part: ${fatal.kind} — ${fatal.message}`);
+  return 0;
+}
+
+async function runReport({ options }, mods) {
+  const snapshot = mods.snapshot.readSnapshot(options['--snapshot'] || mods.snapshot.DEFAULT_SNAPSHOT);
+  const out = options['--out'] || new URL('../report/index.html', import.meta.url).pathname;
+  mods.report.writeReport(out, snapshot);
+  say(`report written: ${out}`);
+  return 0;
+}
+
+async function main(argv) {
+  const args = parseArgs(argv);
+  if (args.flags.has('--help')) { console.log(HELP); return 0; }
+  // Loaded inside the error boundary: a broken checkout must exit 70, not 1.
+  const [chain, rpc, onchain, snapshot, verify, scan, report, w3, pub] = await Promise.all([
+    import('../src/chain.js'), import('../src/rpc.js'), import('../src/onchain.js'), import('../src/snapshot.js'),
+    import('../src/verify.js'), import('../src/scan.js'), import('../src/report.js'), import('../src/binance-web3.js'), import('../src/binance-public.js'),
+  ]);
+  const urls = args.options['--rpc'] ? args.options['--rpc'].split(',').map((s) => s.trim()).filter(Boolean) : chain.rpcUrlsFromEnv();
+  if (!urls.length) throw new UsageError('--rpc lists no endpoint');
+  const mods = { chain, rpc, onchain, snapshot, verify, scan, report, w3, pub, urls };
+  const [command] = args.positional;
+  if (command === 'scan' || command === 'report') {
+    if (args.positional.length !== 1) throw new UsageError(`${command} takes no positional argument`);
+    return command === 'scan' ? runScanCommand(args, mods) : runReport(args, mods);
+  }
+  if (args.positional.length !== 1) throw new UsageError(args.positional.length ? 'exactly one address, please' : 'an address, scan or report is required');
+  return runVerify(args, mods);
 }
 
 function fail(error) {
@@ -125,7 +186,7 @@ function fail(error) {
     console.error(`stv-verify: ${error.message}\n${USAGE}`);
     process.exit(EXIT_USAGE);
   }
-  console.error(`stv-verify: internal error, nothing was concluded: ${String(error?.message || error).slice(0, 300)}`);
+  console.error(`stv-verify: internal error, nothing was concluded: ${String(error?.message || error).replace(/\b([a-z][a-z0-9+.-]*):\/\/(?:[^\s/?#]*@)?([^\s/?#)]+)[^\s)]*/gi, '$1://$2').slice(0, 300)}`);
   process.exit(EXIT_INTERNAL);
 }
 

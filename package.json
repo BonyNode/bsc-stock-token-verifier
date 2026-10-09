@@ -1,7 +1,7 @@
 {
   "name": "stock-token-verifier",
-  "version": "0.1.0",
-  "description": "X PrimeFlow Stock Token Verifier — Stock Token authenticity on Robinhood Chain (chain id 4663): registry, verifier CLI and a read-only API. Zero dependencies.",
+  "version": "0.2.0",
+  "description": "Stock Token Verifier, BNB Smart Chain edition: which bStocks, Ondo Stocks and xStocks contracts on chain 56 are genuine, which are look-alikes, measured from chain state, the issuers' lists and the Binance Web3 API. CLI, JSON snapshot, static report. Zero dependencies.",
   "private": true,
   "license": "SEE LICENSE IN NOTICE",
   "repository": {
@@ -17,19 +17,27 @@
     "node": ">=20"
   },
   "bin": {
-    "stv-verify": "bin/stv-verify.mjs",
-    "stv-serve": "bin/stv-serve.mjs"
+    "stv-verify": "bin/stv-verify.mjs"
   },
   "exports": {
     ".": "./src/index.js"
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "test:live": "STV_LIVE=1 node --test test/live.test.mjs",
     "check": "node scripts/check-clean.mjs",
     "verify": "node bin/stv-verify.mjs",
-    "serve": "node bin/stv-serve.mjs",
-    "recheck": "node scripts/rebuild-registry.mjs --recheck"
+    "scan": "node bin/stv-verify.mjs scan",
+    "report": "node bin/stv-verify.mjs report",
+    "probe": "node scripts/probe-binance-w3.mjs"
   },
-  "keywords": ["robinhood-chain", "stock-tokens", "erc-8056", "evm", "authenticity"]
+  "keywords": [
+    "bnb-smart-chain",
+    "bsc",
+    "bstocks",
+    "ondo",
+    "xstocks",
+    "binance-web3-api",
+    "authenticity",
+    "evm"
+  ]
 }
