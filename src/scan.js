@@ -285,7 +285,9 @@ export async function runScan({ rpc, pub, w3 = null, w3Reason = 'no_api_key', ca
       inIssuerList: inIssuerList(e),
       listedByBinance: [...e.listedBy].some((s) => s.startsWith('binance')),
       facts: f, rule: rules[e.family][e.role],
-      creator: c?.creator ?? null, familyCreators: familyCreators[e.family].map((x) => x.address), creatorChecked: creatorChecked && familyCreators[e.family].length > 0,
+      creator: c?.creator ?? null, familyCreators: familyCreators[e.family].map((x) => x.address),
+      otherFamilyCreators: FAMILY_ORDER.filter((f) => f !== e.family).flatMap((f) => familyCreators[f].map((x) => x.address)),
+      creatorChecked: creatorChecked && familyCreators[e.family].length > 0,
     });
     tokens.push({
       address: e.address, family: e.family, role: e.role, pairAddress: e.pairAddress,

@@ -19,7 +19,12 @@ export const VERIFY_METHOD = 'eth_chainId (must be 56), eth_blockNumber and eth_
 export function contextFromSnapshot(snapshot) {
   const rules = {};
   for (const [family, f] of Object.entries(snapshot.families)) rules[family] = f.fingerprint.roles;
-  const byAddress = new Map(snapshot.tokens.map((t) => [t.address, { ...t, familyCreators: (snapshot.families[t.family]?.fingerprint?.creators || []).map((c) => c.address) }]));
+  const creatorsOf = (family) => (snapshot.families[family]?.fingerprint?.creators || []).map((c) => c.address);
+  const byAddress = new Map(snapshot.tokens.map((t) => [t.address, {
+    ...t,
+    familyCreators: creatorsOf(t.family),
+    otherFamilyCreators: Object.keys(snapshot.families).filter((f) => f !== t.family).flatMap(creatorsOf),
+  }]));
   const index = claimIndex(snapshot.tokens.filter((t) => t.verdict === 'genuine'));
   const lookalikes = new Map((snapshot.lookalikes?.items || []).map((l) => [l.address, l]));
   return { rules, byAddress, index, lookalikes };

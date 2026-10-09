@@ -19,7 +19,7 @@ export const CREATOR_STATUSES = Object.freeze(['ok', 'not_checked', 'no_answer',
 export const REASONS = Object.freeze([
   'issuer_list', 'not_in_issuer_list', 'binance_list', 'no_code', 'code_unreadable',
   'code_hash_match', 'code_hash_mismatch', 'proxy_match', 'proxy_mismatch',
-  'creator_match', 'creator_mismatch', 'creator_not_checked', 'fingerprint_without_listing',
+  'creator_match', 'creator_mismatch', 'creator_not_checked', 'creator_other_family', 'fingerprint_without_listing',
   'claims_symbol', 'claims_name', 'shares_ticker',
 ]);
 
@@ -115,7 +115,7 @@ export function validateSnapshot(snap) {
     need(Array.isArray(t?.reasons) && t.reasons.length > 0 && t.reasons.every((r) => REASONS.includes(r)), `${at}.reasons are known codes`);
     need(isStr(t?.explanation), `${at}.explanation`);
     if (t?.verdict === 'genuine') {
-      need(t.checks?.issuerList === true && t.checks?.codeHash === true && t.checks?.proxy === true && t.checks?.creator !== false, `${at} is genuine only with list, code hash and proxy matching`);
+      need(t.checks?.issuerList === true && t.checks?.codeHash === true && t.checks?.proxy === true && !t.reasons.includes('creator_other_family'), `${at} is genuine only with list, code hash and proxy matching`);
     }
   }
 

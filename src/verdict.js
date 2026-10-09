@@ -74,7 +74,8 @@ const EXPLAIN = Object.freeze({
   proxy_match: 'proxy points to the issuer beacon/admin',
   proxy_mismatch: 'proxy beacon/admin differs from the issuer',
   creator_match: 'created by an address that created contracts fitting the family rule',
-  creator_mismatch: 'created by an address that created no contract fitting the family rule',
+  creator_mismatch: 'created by an address not among the known creators of the family (reported, not held against it)',
+  creator_other_family: 'created by an address known as a creator of another family',
   creator_not_checked: 'creator not checked',
   fingerprint_without_listing: 'code and proxy match a family, but no list has this address',
   claims_symbol: 'its symbol() is exactly the symbol of a listed contract, and its name backs it',
@@ -96,9 +97,16 @@ export const explain = (reasons) => {
  * @param {object|null} input.rule       the family rule for this role
  * @param {string|null} [input.creator]          creator from Binance basic-info, when checked
  * @param {string[]|null} [input.familyCreators] creators of the contracts that fit the family rule
+ * @param {string[]|null} [input.otherFamilyCreators] creators of the OTHER families' rule-fitting contracts
  * @param {boolean} [input.creatorChecked]
+ *
+ * The creator is a cross-check, reported next to the verdict. It demotes a contract that passes the
+ * list, the code hash and the proxy slot only when it positively contradicts the family: the creator
+ * is a known creator of another family's contracts (reason creator_other_family). A creator that is
+ * missing, unread, or simply not among the family's known creators is recorded as a reason and does
+ * not change the verdict: a creator can come from another source, or the family can add a deployer.
  */
-export function listedVerdict({ inIssuerList, listedByBinance, facts, rule, creator = null, familyCreators = null, creatorChecked = false }) {
+export function listedVerdict({ inIssuerList, listedByBinance, facts, rule, creator = null, familyCreators = null, otherFamilyCreators = null, creatorChecked = false }) {
   const reasons = [inIssuerList ? 'issuer_list' : 'not_in_issuer_list'];
   if (listedByBinance) reasons.push('binance_list');
   const checks = { issuerList: !!inIssuerList, hasCode: null, codeHash: null, proxy: null, creator: null };
@@ -111,11 +119,13 @@ export function listedVerdict({ inIssuerList, listedByBinance, facts, rule, crea
   checks.proxy = fit.proxy;
   if (fit.codeHash !== null) reasons.push(fit.codeHash ? 'code_hash_match' : 'code_hash_mismatch');
   if (fit.proxy !== null) reasons.push(fit.proxy ? 'proxy_match' : 'proxy_mismatch');
+  let contradicted = false;
   if (creatorChecked && creator && familyCreators && familyCreators.length) {
     checks.creator = familyCreators.includes(creator);
-    reasons.push(checks.creator ? 'creator_match' : 'creator_mismatch');
+    contradicted = !checks.creator && !!otherFamilyCreators && otherFamilyCreators.includes(creator);
+    reasons.push(checks.creator ? 'creator_match' : (contradicted ? 'creator_other_family' : 'creator_mismatch'));
   } else reasons.push('creator_not_checked');
-  const genuine = checks.issuerList && checks.codeHash === true && checks.proxy === true && checks.creator !== false;
+  const genuine = checks.issuerList && checks.codeHash === true && checks.proxy === true && !contradicted;
   return done(genuine ? 'genuine' : 'unknown');
 }
 
@@ -137,6 +147,7 @@ export function addressVerdict({ listed, facts, rules, index }) {
       facts, rule,
       creator: listed.creator?.address ?? null,
       familyCreators: listed.familyCreators ?? null,
+      otherFamilyCreators: listed.otherFamilyCreators ?? null,
       creatorChecked: listed.creator?.status === 'ok',
     });
     return { ...v, family: listed.family, role: listed.role, claim: null, shared: null };

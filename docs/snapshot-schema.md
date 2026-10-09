@@ -5,6 +5,29 @@ The JSON snapshot is the primary output of this package. `node bin/stv-verify.mj
 `src/schema.js` holds the constants below and `validateSnapshot()`, which the scan runs before it
 writes a file: a snapshot that does not match this document is never written.
 
+## For consumers (read this first)
+
+- **Read `data/snapshot.json` as committed.** Do not re-run the scan to display results. A scan
+  needs a Binance Web3 API key, takes about ten minutes and produces another snapshot at another
+  time. Check `schema` and `generatedAt` before using a file. The snapshot of 2026-10-09T16:46:27Z
+  came from the first scan, before the creator rule was fixed. It reads Ondo as 174 genuine and
+  285 unknown. It was never committed; discard it.
+- **Use `tokens[].verdict` and `tokens[].reasons` as written.** Do not recompute a verdict from
+  `checks`, `onchain` or `families.*.fingerprint`. The snapshot's verdicts are the product.
+- **`families.*.fingerprint.creators` is a set,** never a single expected creator: it lists every
+  address that created a listed contract fitting the rule. On 2026-10-09 Ondo had six. Treating
+  the most frequent one as the only valid creator turns 276 genuine Ondo contracts into
+  "unknown".
+- **The creator is a cross-check.** A missing creator, an unread one, or one outside the known set
+  is reported (`creator_not_checked`, `creator_mismatch`) and does not change the verdict. Only
+  `creator_other_family` — the creator is a known creator of another family — makes a contract
+  `unknown`.
+- **Labels.** Show `verdict: "look-alike"` as "unlisted contract using the same ticker or name",
+  with `claimantKind` as bridged copy / test contract / other issuer / claimant not identified.
+- **Quotes.** Show a quote's figure only when `representative` is `true`. When it is `false`,
+  show "quote not representative" and the reason, never the figure.
+- **Notices.** Show the four `notices` sentences next to the data.
+
 ## Stability
 
 - The identifier `schema` is `"stv-bsc-snapshot/1"`. Within `/1` changes are additive only: a new
@@ -234,7 +257,7 @@ Counts: `{ listed, noCode, genuine, unknown, lookalikes, byRole, byAssetClass }`
 
 | verdict | meaning |
 |---|---|
-| `genuine` | the address is in the family's issuer list **and** its runtime code hash and its proxy slot (beacon or admin) equal the family rule for its role; when the creator was checked, it matches as well |
+| `genuine` | the address is in the family's issuer list **and** its runtime code hash and its proxy slot (beacon or admin) equal the family rule for its role, **and** its creator is not a known creator of another family |
 | `look-alike` | shown as **unlisted contract using the same ticker or name**: on no list, and on chain its `name()` carries the family marker, or its `symbol()` is exactly the symbol of a listed contract (case included) and its name backs it. A claim, not an intent: bridged copies and test deployments are included and sub-labelled by `claimantKind` |
 | `unknown` | neither can be said: listed but the code or slot differs (an outlier, reported rather than forced), the fingerprint matches but the address is not listed, the creator differs, or nothing could be read |
 | `none` | single-address check only: the contract makes no family claim and is not listed |
@@ -250,7 +273,8 @@ Counts: `{ listed, noCode, genuine, unknown, lookalikes, byRole, byAssetClass }`
 | `code_unreadable` | the RPC did not answer; nothing was compared |
 | `code_hash_match` / `code_hash_mismatch` | runtime code hash against the family rule for the role |
 | `proxy_match` / `proxy_mismatch` | beacon or admin slot against the family rule |
-| `creator_match` / `creator_mismatch` / `creator_not_checked` | creator from `binance-w3:basic-info` against the family's creator |
+| `creator_match` / `creator_mismatch` / `creator_not_checked` | creator from `binance-w3:basic-info` against the family's creator set: in it / outside it (reported, does not demote) / not read |
+| `creator_other_family` | the creator is a known creator of another family's contracts: the one creator result that makes a contract `unknown` |
 | `fingerprint_without_listing` | the code and slot match a family, but no list has the address |
 | `claims_symbol` | `symbol()` equals a genuine family symbol |
 | `claims_name` | `name()` carries the family marker |

@@ -57,7 +57,7 @@ written to the snapshot. To choose JSON-RPC endpoints, use `--rpc <url>[,<url>�
 
 | Verdict (machine value) | Shown as | Meaning | CLI exit code |
 |---|---|---|---|
-| `genuine` | genuine | on the issuer's list; code hash and proxy slot fit the family rule (creator, when checked, too) | 0 |
+| `genuine` | genuine | on the issuer's list; code hash and proxy slot fit the family rule; the creator is not another family's | 0 |
 | `look-alike` | unlisted contract using the same ticker or name | on no list, but uses the exact symbol or the name marker of a listed contract. Sub-labelled from its own name and symbol: bridged copy, test contract, other issuer, or claimant not identified | 1 |
 | `unknown` | unknown | in between: listed but outside the rule, or the rule fits but no list has it — with the reason | 2 |
 | `none` | none | single check only: no family claim | 3 |
@@ -112,9 +112,11 @@ A contract is **genuine** when all of these hold:
    (transparent proxies: xStocks token and wrapper) equals the one they share. Proxy bytecode is
    generic — anyone can deploy the same bytes — so it is the slot that names the issuer's beacon or
    admin.
-4. **Creator.** Where checked, the contract creator reported by the Binance Web3 API
-   (`token/basic-info`) is one of the addresses that created contracts fitting the rule. This is a
-   cross-check, not an independent test: the creator set is built from those same contracts.
+4. **Creator.** Where checked, the creator reported by the Binance Web3 API (`token/basic-info`)
+   is not a known creator of *another* family. The creator is a cross-check, reported next to the
+   verdict, and is built from the same contracts the rule fits. Ondo used six deployers on
+   2026-10-09. A creator that is missing, or simply not among the family's known creators, is
+   recorded as a reason and does not change the verdict.
 
 The rules are not typed in. The scan **derives** them from the issuer-listed contracts on chain:
 first the dominant code hash per family and role, then the beacon or admin shared by more than half

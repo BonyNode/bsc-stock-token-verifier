@@ -51,14 +51,23 @@ test('genuine needs the issuer list AND the code hash AND the proxy slot', () =>
   assert.ok(foreignCode.reasons.includes('code_hash_mismatch'));
 });
 
-test('a creator that differs from the family makes a listed contract unknown; an unchecked one does not', () => {
+test('the creator is a cross-check: missing or unknown creators are reported, only another family\'s creator demotes', () => {
   const rule = deriveRule([facts(NVDAB)]);
   const fam = ['0x64fdaf82d69d5a8ab409331e3042042e8a178d53', '0x16ace0cc69fc841e2707913ec2607c8d65126664'];
-  assert.equal(listedVerdict({ inIssuerList: true, facts: facts(NVDAB), rule, creator: fam[1], familyCreators: fam, creatorChecked: true }).verdict, 'genuine', 'any creator of the family set');
-  const bad = listedVerdict({ inIssuerList: true, facts: facts(NVDAB), rule, creator: `0x${'7'.repeat(40)}`, familyCreators: fam, creatorChecked: true });
-  assert.equal(bad.verdict, 'unknown');
-  assert.equal(bad.checks.creator, false);
-  assert.ok(bad.reasons.includes('creator_mismatch'));
+  const xstocksDeployer = '0x5f7a4c11bde4f218f0025ef444c369d838ffa2ad';
+  const base = { inIssuerList: true, facts: facts(NVDAB), rule, familyCreators: fam, otherFamilyCreators: [xstocksDeployer], creatorChecked: true };
+  assert.equal(listedVerdict({ ...base, creator: fam[1] }).verdict, 'genuine', 'any creator of the family set');
+  // Measured 2026-10-09: Ondo uses six deployers. A consumer that expects only the most frequent one
+  // would demote 276 genuine Ondo contracts; a creator outside the known set is therefore reported, not held against it.
+  const other = listedVerdict({ ...base, creator: `0x${'7'.repeat(40)}` });
+  assert.equal(other.verdict, 'genuine');
+  assert.equal(other.checks.creator, false);
+  assert.ok(other.reasons.includes('creator_mismatch'));
+  const unread = listedVerdict({ ...base, creator: null, creatorChecked: false });
+  assert.deepEqual([unread.verdict, unread.reasons.at(-1)], ['genuine', 'creator_not_checked']);
+  const contradicted = listedVerdict({ ...base, creator: xstocksDeployer });
+  assert.equal(contradicted.verdict, 'unknown', 'created by another family\'s deployer');
+  assert.ok(contradicted.reasons.includes('creator_other_family'));
 });
 
 test('no code and unreadable code are never genuine, and never a look-alike either', () => {
