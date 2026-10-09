@@ -71,15 +71,30 @@ Usage errors exit 64, internal errors 70.
 `generatedAt`, `summary.measuredAt` and `sources` in the file for the exact times.
 
 <!-- latest-snapshot:start -->
-Scan of 2026-10-09 with the Binance Web3 API key. The on-chain pass finished 17:04:00 UTC
-(`summary.measuredAt`, block 126 672 570 at its start). The searches for unlisted same-ticker
-contracts finished 17:11:15 UTC (`lookalikes.fetchedAt`).
+Scan of 2026-10-09 with the Binance Web3 API key, at commit `97b8f4b`. The on-chain pass finished
+17:29:43 UTC (`summary.measuredAt`, block 126 675 998 at its start). The searches for unlisted
+same-ticker contracts finished 17:37:02 UTC (`lookalikes.fetchedAt`). Quotes were taken
+17:37:18–17:38:29 UTC, during the US regular session.
 
 | Family | Listed on chain 56 | Genuine | Unknown | Unlisted, same ticker or name (lower bound) |
 |---|---|---|---|---|
-| bStocks | 91 | 91 | 0 | ≥ 653 |
-| Ondo Stocks | 459 | 450 (333 stocks, 117 ETFs) | 9: 7 portfolio tokens on a second beacon and 2 dollar tokens (USDon, USDY) | ≥ 1 114 |
-| xStocks | 2 638 (1 319 tokens + 1 319 v2 wrappers) | 2 638 | 0 | ≥ 488 |
+| bStocks | 91 | 91 | 0 | ≥ 651 |
+| Ondo Stocks | 459 | 450 (333 stocks, 117 ETFs) | 9: 7 portfolio tokens on a second beacon and 2 dollar tokens (USDon, USDY) | ≥ 1 113 |
+| xStocks | 2 638 (1 319 tokens + 1 319 v2 wrappers) | 2 638 | 0 | ≥ 489 |
+
+The 2 253 unlisted same-ticker contracts, by what their own names say: 28 bridged copies, 33 test
+contracts, 42 naming another issuer, and 2 150 not identified. They were found by 782 searches,
+164 of which returned a full page.
+
+The market sample takes the same ten tickers in each family and quotes USDT → token. Each cost is
+measured against the Binance token price of the same run:
+
+- **bStocks:** within +0.6 % at 20, 100 and 1 000 USD for all ten.
+- **Ondo:** within 1.4 % at 20 USD for 8 of 10. COINon was refused (40374). 9 of the 30 cells are
+  marked "quote not representative" — mostly at 1 000 USD, and every size for MSFTon (see the
+  report and `docs/devex-observations.md`).
+- **xStocks:** every quote was refused — 40374 for the tokens, 40441 ("no valid quote from any
+  vendor") for the v2 wrappers.
 <!-- latest-snapshot:end -->
 
 ## How a contract is judged
